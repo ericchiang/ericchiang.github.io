@@ -1,0 +1,11 @@
+.page-content {
+    max-width: 70em;
+    margin: 0 auto;
+    padding: 0 1em;
+}
+pre code {
+    font-size: 0.9em;
+}
+body {
+    color: black;
+}
