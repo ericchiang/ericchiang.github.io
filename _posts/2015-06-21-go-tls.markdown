@@ -19,6 +19,7 @@ Go has a fairly straight forward `crypto/rsa` package in the standard library. F
 
 {% highlight go %}
 // create a public/private keypair
+// NOTE: Use crypto/rand not math/rand
 privKey, err := rsa.GenerateKey(rand.Reader, 2048)
 if err != nil {
     log.Fatalf("generating random key: %v", err)
