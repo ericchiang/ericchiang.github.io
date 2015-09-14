@@ -22,7 +22,7 @@ I currently live in Brooklyn and have previously held possitions at IBM, Genente
 
 * _Why is Python So Fast?_ NYC Python Meetup, YPlan (October 2014): [slides](https://docs.google.com/presentation/d/1dQOflsmAaSDa4RC4l7JxkqBVTFENdkG6KjdB39ss3eo/edit?usp=sharing)
 
-### Articles
+### Articles on Other Blogs
 
 * [_ML Pitfalls: Measuring Performance (Part 1)_](http://blog.yhathq.com/posts/measuring-model-performance-1.html) (March 2015)
 * [_Neural networks and a dive into Julia_](http://blog.yhathq.com/posts/julia-neural-networks.html) (May 2015)

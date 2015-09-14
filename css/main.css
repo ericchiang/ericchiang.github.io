@@ -4,8 +4,20 @@
     padding: 0 1em;
 }
 pre code {
-    font-size: 0.9em;
+    font-size: 1em;
 }
 body {
     color: black;
+}
+
+nav a {
+    font-size: 20px;
+}
+
+.post-content {
+	font-size: 120%;
+}
+
+.post {
+	padding: 0 0 10em 0;
 }
