@@ -6,11 +6,9 @@ permalink: /about/
 
 Hi, my name's Eric.
 
-I'm a founding member and senior engineer at <a href="https://yhathq.com/" target="_blank">Yhat</a>, a YCombinator backed startup based in NYC building tools for data science teams.
-
 You can find me occationally tweeting at [@erchiang](https://twitter.com/erchiang). I also throw weekend projects on my [GitHub](https://github.com/ericchiang).
 
-I currently live in Brooklyn and have previously held possitions at IBM, Genentech, and Cloudera.
+I currently live in Brooklyn and have previously held possitions at IBM, Genentech, Cloudera, and Yhat.
 
 ### Open Source
 
