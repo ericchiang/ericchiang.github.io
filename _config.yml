@@ -11,4 +11,4 @@ twitter_username: erchiang
 github_username:  ericchiang
 
 # Build settings
-markdown: kramdown
+markdown: rdiscount

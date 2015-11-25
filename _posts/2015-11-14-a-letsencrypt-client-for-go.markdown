@@ -19,12 +19,13 @@ To start the client registers a key pair with the server, then uses the private 
 
 First let's generate a key pair for our account.
 
-<pre><code class="nohighlight">ssh-keygen -t rsa -b 4096 -C "your_email@example.com" -f letsencrypt -N ''
-</code></pre>
+```nohighlight
+ssh-keygen -t rsa -b 4096 -C "your_email@example.com" -f letsencrypt -N ''
+```
 
 Then we'll load the private key and register it with the server.
 
-{% highlight go %}
+```go
 package main
 
 import (
@@ -63,13 +64,14 @@ func loadKey(file string) (*rsa.PrivateKey, error) {
 	}
 	return x509.ParsePKCS1PrivateKey(block.Bytes)
 }
-{% endhighlight %}
+```
 
 Nothing too crazy yet.
 
-<pre><code class="nohighlight">$ go run step1.go
+```nohighlight
+$ go run step1.go
 Registration successful!
-</code></pre>
+```
 
 ## Step 2: Requesting challenges
 
@@ -77,7 +79,7 @@ Once we've registered a key pair the next step is to begin a challenge for a spe
 
 The server responds to an authorization request with a list of challenges supported for that domain and a list of combinations of challenges to perform. We'll print the response and take a look at the results.
 
-{% highlight go %}
+```go
 auth, _, err := cli.NewAuthorization(key, "dns", "example.org")
 if err != nil {
 	log.Fatal(err)
@@ -91,9 +93,10 @@ fmt.Println("Combinations:")
 for _, comb := range auth.Combs {
 	fmt.Println(comb)
 }
-{% endhighlight %}
+```
 
-<pre><code class="nohighlight">$ go run step2.go 
+```nohighlight
+$ go run step2.go 
 Challenges:
 simpleHttp http://127.0.0.1:4000/acme/challenge/aOOnrY65LHMSYK6HftGeK795dqEII40NYGVESqqKmGA/1
 dvsni http://127.0.0.1:4000/acme/challenge/aOOnrY65LHMSYK6HftGeK795dqEII40NYGVESqqKmGA/2
@@ -104,7 +107,7 @@ Combinations:
 [1]
 [2]
 [3]
-</code></pre>
+```
 
 The server has issued four different challenges for the domain name.
 
@@ -118,7 +121,7 @@ The server has now challenged us to provision either an HTTP or TLS resource. It
 
 Let's take a look at the HTTP challenge.
 
-{% highlight go %}
+```go
 // grab the HTTP challenge again
 httpChalURL := "http://127.0.0.1:4000/acme/challenge/aOOnrY65LHMSYK6HftGeK795dqEII40NYGVESqqKmGA/3"
 chal, err := cli.Challenge(httpChalURL)
@@ -140,9 +143,10 @@ if err != nil {
 }
 fmt.Println("Path:    ", path)
 fmt.Println("Resource:", resource)
-{% endhighlight %}
+```
 
-<pre><code class="nohighlight">$ go run step3.go 
+```nohighlight
+$ go run step3.go 
 {
   "type": "http-01",
   "uri": "http://127.0.0.1:4000/acme/challenge/aOOnrY65LHMSYK6HftGeK795dqEII40NYGVESqqKmGA/3",
@@ -151,13 +155,13 @@ fmt.Println("Resource:", resource)
 }
 Path:     /.well-known/acme-challenge/1UMQfJKJWZwOmisxPTso_nR9tEP_42PHsq3EcibGbtE
 Resource: 1UMQfJKJWZwOmisxPTso_nR9tEP_42PHsq3EcibGbtE.wF6w7g9k8byiDJcjhwNpLP883uGpxGZL0NdPTEy5PSc
-</code></pre>
+```
 
 As you can see the server has returned a challenge of type `http-01` and a token. [The spec](https://tools.ietf.org/html/draft-ietf-acme-acme-01#section-7.2) documents how to combine that token with the client's private key into a URL path and a HTTP response.
 
 To actually serve the file, we'll need to spin up a HTTP server on the domain we've requested. We then notify the server that the challenge is ready for verification, and poll the challenge until we get a result.
 
-{% highlight go %}
+```go
 go func() {
 	// serve the resource at the given path
 	http.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
@@ -172,11 +176,12 @@ if err := cli.ChallengeReady(key, chal); err != nil {
 	log.Fatal(err)
 }
 fmt.Println("You've completed the challenge!")
-{% endhighlight %}
+```
 
-<pre><code class="nohighlight">$ go run step3.go 
+```nohighlight
+$ go run step3.go 
 You've completed the challenge!
-</code></pre>
+```
 
 And that's it. We've provisioned the resource, the server checked that it was there, and the challenge has been verified.
 
@@ -192,7 +197,7 @@ First, the client generates a certificate request. This holds information like w
 
 You can use tools like `openssl` to generate these request. But since we're talking Go, here's how you make one using the standard library.
 
-{% highlight go %}
+```go
 package main
 
 import (
@@ -231,7 +236,7 @@ func main() {
 		log.Fatal(err)
 	}
 }
-{% endhighlight %}
+```
 
 Running this will create `example.org.csr` and `example.org.key`.
 
@@ -239,7 +244,7 @@ Running this will create `example.org.csr` and `example.org.key`.
 
 Finally we sign the certificate request using our account's key (not the one used to generate the request) and send it to the server. Since the account associated with the key has completed the challenges for the domain we've requested, it should issue us a certificate.
 
-{% highlight go %}
+```go
 package main
 
 import (
@@ -298,9 +303,10 @@ func loadCSR(file string) (*x509.CertificateRequest, error) {
 	}
 	return x509.ParseCertificateRequest(block.Bytes)
 }
-{% endhighlight %}
+```
 
-<pre><code class="nohighlight">$ go run step4.go 
+```nohighlight
+$ go run step4.go 
 $ cat example.org.crt
 -----BEGIN CERTIFICATE-----
 MIIEVzCCAz+gAwIBAgITAP9Jk5pSbvv6cgNUQrFxf/pzITANBgkqhkiG9w0BAQsF
@@ -328,7 +334,7 @@ waSqKijW4zg5U5n66Ypb5CXRw+0LOtV+U64Fd9ifGBVReNRxvx+k23+3/3YO38YW
 rqbQUkp9UsCPuWlxTNXHefV0D/p2SmwAa2No7b7WxXV37nGH+5Uh+rUBsIQ18JOy
 IeNqHO/uy/bkmCg=
 -----END CERTIFICATE-----
-</code></pre>
+```
 
 Holy moley, it worked.
 
