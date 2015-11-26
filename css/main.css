@@ -18,6 +18,14 @@ nav a {
 	font-size: 120%;
 }
 
+.nohighlight {
+	color: black;
+}
+
 .post {
 	padding: 0 0 10em 0;
+}
+
+h1, h2, h3, h4 {
+	font-weight: bold;
 }
