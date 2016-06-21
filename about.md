@@ -4,11 +4,9 @@ title: About
 permalink: /about/
 ---
 
-Hi, my name's Eric.
+Hi, my name's Eric. I'm a software engineer at [CoreOS](https://coreos.com/).
 
 You can find me occationally tweeting at [@erchiang](https://twitter.com/erchiang). I also throw weekend projects on my [GitHub](https://github.com/ericchiang).
-
-I currently live in Brooklyn and have previously held possitions at IBM, Genentech, Cloudera, and Yhat.
 
 ### Open Source
 
@@ -17,7 +15,6 @@ I currently live in Brooklyn and have previously held possitions at IBM, Genente
 ### Talks
 
 * _Data Science Dev Ops_ NextML Boston (April 2015): [slides](http://www.slideshare.net/ericmchiang/nextml-boston-data-science-dev-ops)
-
 * _Why is Python So Fast?_ NYC Python Meetup, YPlan (October 2014): [slides](https://docs.google.com/presentation/d/1dQOflsmAaSDa4RC4l7JxkqBVTFENdkG6KjdB39ss3eo/edit?usp=sharing)
 
 ### Articles on Other Blogs
