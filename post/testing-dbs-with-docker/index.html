@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="en">
+
+  <head>
+  <meta charset="utf-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+
+  <title>Testing Databases with Docker</title>
+
+  <meta name="author" content="Eric Chiang" />
+  
+  
+
+  <meta name="generator" content="Hugo 0.18-DEV" />
+
+  <link rel="alternate" href="https://ericchiang.github.io/index.xml" type="application/rss+xml" title="posts">
+
+  <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.5.0/css/font-awesome.min.css" />
+  <link rel="stylesheet" href="https://ericchiang.github.io/css/bootstrap.min.css" />
+  <link rel="stylesheet" href="https://ericchiang.github.io/css/main.css" />
+  <link rel="stylesheet" href="//fonts.googleapis.com/css?family=Lora:400,700,400italic,700italic" />
+  <link rel="stylesheet" href="//fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,800italic,400,300,600,700,800" />
+  <link rel="stylesheet" href="https://ericchiang.github.io/css/pygment_highlights.css" />
+  
+  
+  <meta property="og:title" content="Testing Databases with Docker" />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="/post/testing-dbs-with-docker//" />
+  <meta property="og:image" content="" />
+  
+</head>
+
+
+  <body>
+
+    <nav class="navbar navbar-default navbar-fixed-top navbar-custom">
+  <div class="container-fluid">
+    <div class="navbar-header">
+      <button type="button" class="navbar-toggle" data-toggle="collapse" data-target="#main-navbar">
+        <span class="sr-only">Toggle navigation</span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+      </button>
+      <a class="navbar-brand" href="https://ericchiang.github.io/">posts</a>
+      <a class="navbar-brand" href="https://ericchiang.github.io//about/">about</a>
+    </div>
+
+    <div class="collapse navbar-collapse" id="main-navbar">
+      <ul class="nav navbar-nav navbar-right">
+      
+      </ul>
+    </div>
+
+	<div class="avatar-container">
+	  <div class="avatar-img-border">
+      
+	  </div>
+	</div>
+
+  </div>
+</nav>
+
+
+    <div role="main" class="container main-content">
+
+      
+        
+
+
+
+
+
+<header class="header-section ">
+
+<div class="intro-header no-img">
+  <div class="container">
+    <div class="row">
+      <div class="col-lg-8 col-lg-offset-2 col-md-10 col-md-offset-1">
+        <div class="post-heading">
+          <h1>Testing Databases with Docker</h1>
+      
+      
+      
+      <span class="post-meta">Posted on September 14, 2015</span>
+      
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</header>
+
+
+
+
+<div class="container">
+  <div class="row">
+    <div class="col-lg-8 col-lg-offset-2 col-md-10 col-md-offset-1">
+      <article role="main" class="blog-post">
+          
+
+<p>Databases, authentication management, metric aggregators; there&rsquo;s a service or API for everything.</p>
+
+<p>There&rsquo;s also a place called dependency hell.</p>
+
+<p>Dependency hell. Where it&rsquo;s impossible to run a test on your laptop. Where bugs are found by running a main, clicking around, and seeing what breaks. Where you cross your fingers and pray that new versions don&rsquo;t break everything. Where we use mocks and stubs to combat a growing technology stack.</p>
+
+<p>But why mock when you can have the real thing?</p>
+
+<p>This post is about using Docker in test infrastructure. To run the code you&rsquo;ll need:</p>
+
+<ol>
+<li>Go</li>
+<li>Docker running on your host machine (not boot2docker - sorry OS X and Windows users)</li>
+</ol>
+
+<h2 id="an-example-using-postgres">An example using Postgres</h2>
+
+<p>I work at a company that has a Go project that uses Postgres. How do you test database code? Maybe you can convince all of your employees to install Postgres with the exact same configuration. Maybe you could use SQLite to reduce dev setup times (never do this).</p>
+
+<p>Of course with the awesomeness of Linux containers you just need to use Docker!</p>
+
+<p>The workflow we&rsquo;re looking for: for each test, start a fresh instance of Postgres in a Docker container, then run the tests using it.</p>
+
+<pre><code class="language-go">dockerContainer, err := NewPostgresDB()
+if err != nil {
+	// handle error
+}
+defer destroy(dockerContainer)
+
+// run test
+</code></pre>
+
+<p>For our code, the Postgres struct will look like this. There&rsquo;s only two bits of information that it&rsquo;ll hold, the port the container is running on and the ID of the container.</p>
+
+<pre><code class="language-go">type PostgresDB struct {
+	// Of form 'host:port'
+	Host string
+
+	// The container id assigned by docker
+	cid string
+}
+</code></pre>
+
+<h2 id="postgres-docker-images">Postgres&rsquo; Docker images</h2>
+
+<p>Postgres has an <a href="https://hub.docker.com/_/postgres/">official image</a> through Docker Hub. Most databases do.</p>
+
+<p>Starting a container is easy using Docker and will look something like the following.</p>
+
+<pre><code class="language-nohighlight">docker run -d -p $HOSTPORT:5432 -e POSTGRES_PASSWORD=$PASS postgres:$VERSION
+</code></pre>
+
+<p>The <code>-p</code> flag requests an exposed port and, because Postgres runs on port <code>5432</code>, we need to map <code>5432</code> to the host machine. <code>-d</code> indicates &ldquo;detached mode,&rdquo; and <code>-e</code> is used to specify environment variables.</p>
+
+<p>The actual image allows for a bit of configuration through the env. This will be another struct.</p>
+
+<pre><code class="language-go">type PostgresConfig struct {
+	Password string
+	Username string // defaults to &quot;postgres&quot;
+	Database string // defaults to &quot;username&quot;
+	Version  string // defaults to &quot;latest&quot;
+}
+</code></pre>
+
+<p>To create an instance of Postgres, we&rsquo;ll determine Docker&rsquo;s command line arguments given a config. Then run the Docker command through Go&rsquo;s <code>os/exec</code> library.</p>
+
+<pre><code class="language-go">func NewPostgresDB(c PostgresConfig) (*PostgresDB, error) {
+	img := &quot;postgres:latest&quot;
+	if c.Version == &quot;&quot; {
+		img = &quot;postgres:&quot; + c.Version
+	}
+
+	// docker's run command has the nasty habbit of pulling images if you don't have them.
+	// Warn user they need to pull the image, don't automatically pull for them.
+	if exec.Command(&quot;docker&quot;, &quot;inspect&quot;, img).Run() != nil {
+		return nil, fmt.Errorf(&quot;db requires docker image %s, please pull or specify a different version&quot;, img)
+	}
+
+	// Running on port 0 instructs the operating system to pick an available port.
+	dockerArgs := []string{&quot;run&quot;, &quot;-d&quot;, &quot;-p&quot;, &quot;127.0.0.1:0:5432&quot;}
+	envvars := map[string]string{
+		&quot;POSTGRES_PASSWORD&quot;: c.Password,
+		&quot;POSTGRES_USER&quot;:     c.Username,
+		&quot;POSTGRES_DB&quot;:       c.Database,
+	}
+	for key, val := range envvars {
+		if val != &quot;&quot; {
+			dockerArgs = append(dockerArgs, &quot;-e&quot;, key+&quot;=&quot;+val)
+		}
+	}
+	dockerArgs = append(dockerArgs, img)
+
+	// Start the docker container.
+	out, err := exec.Command(&quot;docker&quot;, dockerArgs...).CombinedOutput()
+	if err != nil {
+		return nil, fmt.Errorf(&quot;docker run: %v: %s&quot;, err, out)
+	}
+	cid := strings.TrimSpace(string(out))
+	db := &amp;PostgresDB{cid: cid}
+
+	db.Host, err = portMapping(cid, &quot;5432/tcp&quot;)
+	if err != nil {
+		db.Close()
+		return nil, err
+	}
+	return db, nil
+}
+</code></pre>
+
+<p>The host address specified above is <code>127.0.0.1:0</code>. Port 0 is a way of telling the operating system to pick any available port. For testing it&rsquo;s nice to not hard code an explicit port in case the person running the tests has a conflicting service (like an actually Postgres database).</p>
+
+<p><code>docker inspect</code> allows us figure out what port the operating system chose. This returns a giant JSON object with, among other things, network settings for the running container.</p>
+
+<pre><code class="language-go">func portMapping(cid, containerPort string) (hostAddr string, err error) {
+	out, err := exec.Command(&quot;docker&quot;, &quot;inspect&quot;, cid).CombinedOutput()
+	if err != nil {
+		return &quot;&quot;, fmt.Errorf(&quot;docker inspect: %v: %s&quot;, err, out)
+	}
+
+	// anonymous struct for unmarshalling JSON into
+	var inspectResp []struct {
+		NetworkSettings struct {
+			Ports map[string][]struct {
+				HostIp   string
+				HostPort string
+			}
+		}
+	}
+	if err := json.Unmarshal(out, &amp;inspectResp); err != nil {
+		return &quot;&quot;, fmt.Errorf(&quot;decoding docker inspect result failed: %v: %s&quot;, err, out)
+	}
+	if len(inspectResp) != 1 {
+		return &quot;&quot;, fmt.Errorf(&quot;expected one inspect result, got %d&quot;, len(inspectResp))
+	}
+	ports := inspectResp[0].NetworkSettings.Ports[containerPort]
+	if len(ports) != 1 {
+		return &quot;&quot;, fmt.Errorf(&quot;expected one port mapping, got %d&quot;, len(ports))
+	}
+	return ports[0].HostIp + &quot;:&quot; + ports[0].HostPort, nil
+}
+</code></pre>
+
+<p>Finally, closing the database should result in the entire container being removed. Again, we&rsquo;ll just use <code>os/exec</code> to call Docker.</p>
+
+<pre><code class="language-go">// Close removes the container running the postgres database.
+func (db *PostgresDB) Close() error {
+	out, err := exec.Command(&quot;docker&quot;, &quot;rm&quot;, &quot;-f&quot;, db.cid).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf(&quot;docker rm: %v: %s&quot;, err, out)
+	}
+	return nil
+}
+</code></pre>
+
+<h2 id="writing-a-test-helper">Writing a test helper</h2>
+
+<p>Go tests always have a signature like this:</p>
+
+<pre><code class="language-go">func TestXyz(t *testing.T)
+</code></pre>
+
+<p>We want to write tests that take a database connection as well. Something that looks like this:</p>
+
+<pre><code class="language-go">type DBTest func(t *testing.T, conn *sql.DB)
+</code></pre>
+
+<p>So let&rsquo;s write a function to run a <code>DBTest</code>. This steps will be</p>
+
+<ol>
+<li>Create a container</li>
+<li>Connect to the container</li>
+<li>Run a test with the connection</li>
+<li>Clean up the container</li>
+</ol>
+
+<p>Importing the <a href="https://github.com/lib/pq"><code>github.com/lib/pq</code></a> driver is enough to connect to the container. While the code we used before will create and clean up a new instance of Postgres for each test.</p>
+
+<pre><code class="language-go">import (
+	// other imports
+
+	_ &quot;github.com/lib/pq&quot; // &quot;empty import&quot; to register driver with database/sql
+)
+
+type DBTest func(t *testing.T, conn *sql.DB)
+
+func RunDBTest(t *testing.T, dbVersion string, test DBTest) {
+	c := PostgresConfig{&quot;pass&quot;, &quot;eric&quot;, &quot;postgrestest&quot;, dbVersion}
+
+	// create a postgres container
+	db, err := NewPostgresDB(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close() // destroy the postgres container after the test
+
+	// create a connection URL
+	// http://www.postgresql.org/docs/current/static/libpq-connect.html#LIBPQ-CONNSTRING
+	connURL := &amp;url.URL{
+		Scheme:   &quot;postgres&quot;,
+		User:     url.UserPassword(c.Username, c.Password),
+		Host:     db.Host,
+		Path:     &quot;/&quot; + c.Database,
+		RawQuery: &quot;sslmode=disable&quot;,
+	}
+
+	// connect to database
+	conn, err := sql.Open(&quot;postgres&quot;, connURL.String())
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer conn.Close()
+
+	// ping the database until it comes up
+	timeout := time.Now().Add(time.Second * 20)
+	for time.Now().Before(timeout) {
+		if err = conn.Ping(); err == nil {
+			// yay! we've connected to the database, time to run the test
+			test(t, conn)
+			return
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	t.Errorf(&quot;failed to connect to database: %v&quot;, err)
+}
+</code></pre>
+
+<h2 id="time-to-write-the-tests">Time to write the tests</h2>
+
+<p>Finally we can just write tests that adhere to <code>DBTest</code>&rsquo;s function signature and run them with <code>RunDBTest</code>. Let&rsquo;s test creating a table and inserting a record.</p>
+
+<pre><code class="language-go">package dbtest
+
+import (
+	&quot;database/sql&quot;
+	&quot;testing&quot;
+
+	_ &quot;github.com/lib/pq&quot;
+)
+
+func createTable(conn *sql.DB) error {
+	statement := `
+		CREATE TABLE Worker (
+			WorkerId SERIAL PRIMARY KEY,
+			Host     TEXT NOT NULL,
+			UsingTLS BOOLEAN NOT NULL
+		);`
+	_, err := conn.Exec(statement)
+	return err
+}
+
+// Test creating a table
+func testCreateTable(t *testing.T, conn *sql.DB) {
+	if err := createTable(conn); err != nil {
+		t.Error(err)
+	}
+}
+
+// Test creating a table then inserting a row
+func testInsertWorker(t *testing.T, conn *sql.DB) {
+	if err := createTable(conn); err != nil {
+		t.Error(err)
+		return
+	}
+	insertWorker := `INSERT INTO Worker (Host, UsingTLS) VALUES ($1, $2);`
+	if _, err := conn.Exec(insertWorker, &quot;10.0.0.3&quot;, true); err != nil {
+		t.Error(err)
+	}
+}
+
+// Test multiple versions of Postgres
+const (
+	version94 = &quot;9.4&quot;
+	version95 = &quot;9.5&quot;
+)
+
+// The actual Go tests just immediately call RunDBTest
+func TestCreateTable94(t *testing.T)  { RunDBTest(t, version94, testCreateTable) }
+func TestCreateTable95(t *testing.T)  { RunDBTest(t, version95, testCreateTable) }
+func TestInsertWorker94(t *testing.T) { RunDBTest(t, version94, testInsertWorker) }
+func TestInsertWorker95(t *testing.T) { RunDBTest(t, version95, testInsertWorker) }
+</code></pre>
+
+<p>This setup enables a bunch of cool things like tests against different versions of Postgres. Once we (or importantly, one of our coworkers) have pulled the correct Postgres images, we just have to run <code>go test</code>. The only dependencies are Go and Docker.</p>
+
+<pre><code class="language-nohighlight">$ go test -v
+=== RUN   TestCreateTable94
+--- PASS: TestCreateTable94 (6.21s)
+=== RUN   TestCreateTable95
+--- PASS: TestCreateTable95 (6.09s)
+=== RUN   TestInsertWorker94
+--- PASS: TestInsertWorker94 (5.97s)
+=== RUN   TestInsertWorker95
+--- PASS: TestInsertWorker95 (5.83s)
+PASS
+ok  	_/p/go/dbtest	24.106s
+</code></pre>
+
+<p>It&rsquo;s not blindingly fast, but most of the overhead is from Postgres&rsquo; <a href="https://github.com/docker-library/postgres/blob/87b8be7e9b324ff2bcd6545d05895fac8f012dac/9.5/docker-entrypoint.sh">initialization</a>, not Docker. If you know your configuration ahead of time, it&rsquo;s easy to make a custom Docker image and speed things up.</p>
+
+<p>Importantly, we&rsquo;re testing against full installations of Postgres 9.4 and 9.5. No mocks, no sqlite.</p>
+
+<h2 id="things-other-than-databases">Things other than databases</h2>
+
+<p>This strategy is absolutely <em>not</em> limited to databases, and gets even cooler when you expand past just hitting an exposed port.</p>
+
+<p>With a little bit of imagination you can use Docker to test your Nginx config files, your RabbitMQ client, your WordPress plugins. For each test you&rsquo;ll get a fresh installation of the thing your testing against, and all a coworker needs to do is download a Docker image.</p>
+
+<p>So mount your files, use <a href="https://github.com/bradfitz/http2/blob/f8202bc903bda493ebba4aa54922d78430c2c42f/http2_test.go#L96-L102"><code>--net=host</code></a>, and who knows, you might even have a little fun writing tests.</p>
+
+      </article>
+
+      <ul class="pager blog-pager">
+        
+        <li class="previous">
+          <a href="https://ericchiang.github.io/post/go-tls/" data-toggle="tooltip" data-placement="top" title="TLS with Go">&larr; Previous Post</a>
+        </li>
+        
+        
+        <li class="next">
+          <a href="https://ericchiang.github.io/post/go-letsencrypt/" data-toggle="tooltip" data-placement="top" title="A Let&#39;s Encrypt Client for Go">Next Post &rarr;</a>
+        </li>
+        
+      </ul>
+
+      
+
+    </div>
+  </div>
+</div>
+
+      
+
+    </div>
+
+    <footer>
+  <div class="container beautiful-jekyll-footer">
+    <div class="row">
+      <div class="col-lg-8 col-lg-offset-2 col-md-10 col-md-offset-1">
+        <ul class="list-inline text-center footer-links">
+          
+          
+          <li>
+            <a href="https://github.com/ericchiang" title="GitHub">
+              <span class="fa-stack fa-lg">
+                <i class="fa fa-circle fa-stack-2x"></i>
+                <i class="fa fa-github fa-stack-1x fa-inverse"></i>
+              </span>
+            </a>
+          </li>
+          
+		      
+          <li>
+            <a href="https://twitter.com/erchiang" title="Twitter">
+              <span class="fa-stack fa-lg">
+                <i class="fa fa-circle fa-stack-2x"></i>
+                <i class="fa fa-twitter fa-stack-1x fa-inverse"></i>
+              </span>
+            </a>
+          </li>
+          
+		      
+		      
+	    	  
+          
+          
+
+    		  <li>
+      			<a href="https://ericchiang.github.io/index.xml" title="RSS">
+      			  <span class="fa-stack fa-lg">
+        				<i class="fa fa-circle fa-stack-2x"></i>
+        				<i class="fa fa-rss fa-stack-1x fa-inverse"></i>
+      			  </span>
+      			</a>
+    		  </li>		
+
+        </ul>
+        <p class="copyright text-muted">
+    		  Eric Chiang
+    		  &nbsp;&bull;&nbsp;
+    		  2017
+    		  
+    		  
+    		  &nbsp;&bull;&nbsp;
+    		  <a href="https://ericchiang.github.io/">posts</a>
+    		  
+  	    </p>
+  	        
+    		<p class="theme-by text-muted">
+    		  Theme by
+    		  <a href="http://deanattali.com/beautiful-jekyll/">beautiful-jekyll</a>
+    		</p>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script src="https://ericchiang.github.io/js/jquery-1.11.2.min.js"></script>
+<script src="https://ericchiang.github.io/js/bootstrap.min.js"></script>
+<script src="https://ericchiang.github.io/js/main.js"></script>
+
+
+<script>
+(function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+(i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+})(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+ga('create', 'UA-64244584-1', 'auto');
+ga('send', 'pageview');
+</script>
+
+
+  </body>
+</html>

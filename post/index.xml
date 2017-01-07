@@ -1,0 +1,1470 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Post-rsses on posts</title>
+    <link>https://ericchiang.github.io/post/index.xml</link>
+    <description>Recent content in Post-rsses on posts</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>en-us</language>
+    <lastBuildDate>Sat, 07 Jan 2017 00:00:00 +0000</lastBuildDate>
+    <atom:link href="https://ericchiang.github.io/post/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>Containers from Scratch</title>
+      <link>https://ericchiang.github.io/post/containers-from-scratch/</link>
+      <pubDate>Sat, 07 Jan 2017 00:00:00 +0000</pubDate>
+      
+      <guid>https://ericchiang.github.io/post/containers-from-scratch/</guid>
+      <description>
+
+&lt;p&gt;This is write up for talk I gave at &lt;a href=&#34;http://catbarcamp.org/&#34;&gt;CAT BarCamp&lt;/a&gt;, an awesome unconference at Portland State University. The talk started with the self-imposed challenge &lt;em&gt;&amp;ldquo;give an intro to containers without Docker or rkt.&amp;rdquo;&lt;/em&gt;&lt;/p&gt;
+
+&lt;p&gt;Often thought of as cheap VMs, containers are just isolated groups of processes running on a single host. That isolation leverages several underlying technologies built into the Linux kernel: namespaces, cgroups, chroots and lots of terms you&amp;rsquo;ve probably heard before.&lt;/p&gt;
+
+&lt;p&gt;So, let&amp;rsquo;s have a little fun and use those underlying technologies to build our own containers.&lt;/p&gt;
+
+&lt;p&gt;On today&amp;rsquo;s agenda:&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;#container-file-system&#34;&gt;setting up a file system&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;#chroot&#34;&gt;chroot&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;#creating-namespaces-with-unshare&#34;&gt;unshare&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;#entering-namespaces-with-nsenter&#34;&gt;nsenter&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;#getting-around-chroot-with-mounts&#34;&gt;bind mounts&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;#cgroups&#34;&gt;cgroups&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;#container-security-and-capabilities&#34;&gt;capabilities&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h2 id=&#34;container-file-systems&#34;&gt;Container file systems&lt;/h2&gt;
+
+&lt;p&gt;Container images, the thing you download from the internet, are literally just tarballs (or tarballs in tarballs if you&amp;rsquo;re fancy). The least magic part of a container are the files you interact with.&lt;/p&gt;
+
+&lt;p&gt;For this post I&amp;rsquo;ve build a simple tarball by stripping down a Docker image. The tarball holds something that looks like a Debian file system and will be our playground for isolating processes.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ wget https://github.com/ericchiang/containers-from-scratch/releases/download/v0.1.0/rootfs.tar.gz
+$ sha256sum rootfs.tar.gz 
+c79bfb46b9cf842055761a49161831aee8f4e667ad9e84ab57ab324a49bc828c  rootfs.tar.gz
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;First, explode the tarball and poke around.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ # tar needs sudo to create /dev files and setup file ownership
+$ sudo tar -zxf rootfs.tar.gz
+$ ls rootfs
+bin   dev  home  lib64  mnt  proc  run   srv  tmp  var
+boot  etc  lib   media  opt  root  sbin  sys  usr
+$ ls -al rootfs/bin/ls
+-rwxr-xr-x. 1 root root 118280 Mar 14  2015 rootfs/bin/ls
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;The resulting directory looks an awful lot like a Linux system. There&amp;rsquo;s a &lt;code&gt;bin&lt;/code&gt; directory with executables, an &lt;code&gt;etc&lt;/code&gt; with system configuration, a &lt;code&gt;lib&lt;/code&gt; with shared libraries, and so on.&lt;/p&gt;
+
+&lt;p&gt;Actually building this tarball is an interesting topic, but one we&amp;rsquo;ll be glossing over here. For an overview, I&amp;rsquo;d strongly recommend the excellent talk &lt;a href=&#34;https://www.youtube.com/watch?v=gMpldbcMHuI&#34;&gt;&lt;em&gt;&amp;ldquo;Minimal Containers&amp;rdquo;&lt;/em&gt;&lt;/a&gt; by my coworker Brian Redbeard.&lt;/p&gt;
+
+&lt;h2 id=&#34;chroot&#34;&gt;chroot&lt;/h2&gt;
+
+&lt;p&gt;The first tool we&amp;rsquo;ll be working with is &lt;code&gt;chroot&lt;/code&gt;. A thin wrapper around the similarly named syscall, it allows us to restrict a process&amp;rsquo; view of the file system. In this case, we&amp;rsquo;ll restrict our process to the &amp;ldquo;rootfs&amp;rdquo; directory then exec a shell.&lt;/p&gt;
+
+&lt;p&gt;Once we&amp;rsquo;re in there we can poke around, run commands, and do typical shell things.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ sudo chroot rootfs /bin/bash
+root@localhost:/# ls /
+bin   dev  home  lib64  mnt  proc  run   srv  tmp  var
+boot  etc  lib   media  opt  root  sbin  sys  usr
+root@localhost:/# which python
+/usr/bin/python
+root@localhost:/# /usr/bin/python -c &#39;print &amp;quot;Hello, container world!&amp;quot;&#39;
+Hello, container world!
+root@localhost:/# 
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;It&amp;rsquo;s worth noting that this works because of all the things baked into the tarball. When we execute the Python interpreter, we&amp;rsquo;re executing &lt;code&gt;rootfs/usr/bin/python&lt;/code&gt;, not the host&amp;rsquo;s Python. That interpreter depends on shared libraries and device files that have been intentionally included in the archive.&lt;/p&gt;
+
+&lt;p&gt;Speaking of applications, instead of shell we can run one in our chroot.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ sudo chroot rootfs python -m SimpleHTTPServer
+Serving HTTP on 0.0.0.0 port 8000 ...
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;If you&amp;rsquo;re following along at home, you&amp;rsquo;ll be able to view everything the file server can see at &lt;a href=&#34;http://localhost:8000/&#34;&gt;http://localhost:8000/&lt;/a&gt;.&lt;/p&gt;
+
+&lt;h2 id=&#34;creating-namespaces-with-unshare&#34;&gt;Creating namespaces with unshare&lt;/h2&gt;
+
+&lt;p&gt;How isolated is this chrooted process? Let&amp;rsquo;s run a command on the host in another terminal.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ # outside of the chroot
+$ top
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Sure enough, we can see the &lt;code&gt;top&lt;/code&gt; invocation from inside the chroot.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ sudo chroot rootfs /bin/bash
+root@localhost:/# mount -t proc proc /proc
+root@localhost:/# ps aux | grep top
+1000     24753  0.1  0.0 156636  4404 ?        S+   22:28   0:00 top
+root     24764  0.0  0.0  11132   948 ?        S+   22:29   0:00 grep top
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Better yet, our chrooted shell is running as root, so it has no problem killing the &lt;code&gt;top&lt;/code&gt; process.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;root@localhost:/# pkill top
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;So much for containment.&lt;/p&gt;
+
+&lt;p&gt;This is where we get to talk about namespaces. Namespaces allow us to create restricted views of systems like the process tree, network interfaces, and mounts.&lt;/p&gt;
+
+&lt;p&gt;Creating namespace is super easy, just a single syscall with one argument, &lt;a href=&#34;https://linux.die.net/man/2/unshare&#34;&gt;&lt;code&gt;unshare&lt;/code&gt;&lt;/a&gt;. The &lt;code&gt;unshare&lt;/code&gt; command line tool gives us a nice wrapper around this syscall and lets us setup namespaces manually. In this case, we&amp;rsquo;ll create a PID namespace for the shell, then execute the chroot like the last example.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ sudo unshare -p -f --mount-proc=$PWD/rootfs/proc \
+    chroot rootfs /bin/bash
+root@localhost:/# ps aux
+USER       PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND
+root         1  0.0  0.0  20268  3240 ?        S    22:34   0:00 /bin/bash
+root         2  0.0  0.0  17504  2096 ?        R+   22:34   0:00 ps aux
+root@localhost:/#
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Having created a new process namespace, poking around our chroot we&amp;rsquo;ll notice something a bit funny. Our shell thinks its PID is 1?! What&amp;rsquo;s more, we can&amp;rsquo;t see the host&amp;rsquo;s process tree anymore.&lt;/p&gt;
+
+&lt;h2 id=&#34;entering-namespaces-with-nsenter&#34;&gt;Entering namespaces with nsenter&lt;/h2&gt;
+
+&lt;p&gt;A powerful aspect of namespaces is their composability; processes may choose to separate some namespaces but share others. For instance it may be useful for two programs to have isolated PID namespaces, but share a network namespace (e.g. &lt;a href=&#34;http://kubernetes.io/docs/user-guide/pods/&#34;&gt;Kubernetes pods&lt;/a&gt;). This brings us to the &lt;a href=&#34;https://linux.die.net/man/2/setns&#34;&gt;&lt;code&gt;setns&lt;/code&gt;&lt;/a&gt; syscall and the &lt;code&gt;nsenter&lt;/code&gt;command line tool.&lt;/p&gt;
+
+&lt;p&gt;Let&amp;rsquo;s find the shell running in a chroot from our last example.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ # From the host, not the chroot.
+$ ps aux | grep /bin/bash | grep root
+...
+root     29840  0.0  0.0  20272  3064 pts/5    S+   17:25   0:00 /bin/bash
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;The kernel exposes namespaces under &lt;code&gt;/proc/(PID)/ns&lt;/code&gt; as files. In this case, &lt;code&gt;/proc/29840/ns/pid&lt;/code&gt; is the process namespace we&amp;rsquo;re hoping to join.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ sudo ls -l /proc/29840/ns
+total 0
+lrwxrwxrwx. 1 root root 0 Oct 15 17:31 ipc -&amp;gt; &#39;ipc:[4026531839]&#39;
+lrwxrwxrwx. 1 root root 0 Oct 15 17:31 mnt -&amp;gt; &#39;mnt:[4026532434]&#39;
+lrwxrwxrwx. 1 root root 0 Oct 15 17:31 net -&amp;gt; &#39;net:[4026531969]&#39;
+lrwxrwxrwx. 1 root root 0 Oct 15 17:31 pid -&amp;gt; &#39;pid:[4026532446]&#39;
+lrwxrwxrwx. 1 root root 0 Oct 15 17:31 user -&amp;gt; &#39;user:[4026531837]&#39;
+lrwxrwxrwx. 1 root root 0 Oct 15 17:31 uts -&amp;gt; &#39;uts:[4026531838]&#39;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;The &lt;code&gt;nsenter&lt;/code&gt; command provides a wrapper around &lt;code&gt;setns&lt;/code&gt; to enter a namespace. We&amp;rsquo;ll provide the namespace file, then run the &lt;code&gt;unshare&lt;/code&gt; to remount &lt;code&gt;/proc&lt;/code&gt; and &lt;code&gt;chroot&lt;/code&gt; to setup a chroot. This time, instead of creating a new namespace, our shell will join the existing one.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ sudo nsenter --pid=/proc/29840/ns/pid \
+    unshare -f --mount-proc=$PWD/rootfs/proc \
+    chroot rootfs /bin/bash
+root@localhost:/# ps aux
+USER       PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND
+root         1  0.0  0.0  20272  3064 ?        S+   00:25   0:00 /bin/bash
+root         5  0.0  0.0  20276  3248 ?        S    00:29   0:00 /bin/bash
+root         6  0.0  0.0  17504  1984 ?        R+   00:30   0:00 ps aux
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Having entered the namespace successfully, when we run &lt;code&gt;ps&lt;/code&gt; in the second shell (PID 5) we see the first shell (PID 1).&lt;/p&gt;
+
+&lt;h2 id=&#34;getting-around-chroot-with-mounts&#34;&gt;Getting around chroot with mounts&lt;/h2&gt;
+
+&lt;p&gt;When deploying an &amp;ldquo;immutable&amp;rdquo; container it often becomes important to inject files or directories into the chroot, either for storage or configuration. For this example, we&amp;rsquo;ll create some files on the host, then expose them read-only to the chrooted shell using &lt;code&gt;mount&lt;/code&gt;.&lt;/p&gt;
+
+&lt;p&gt;First, let&amp;rsquo;s make a new directory to mount into the chroot and create a file there.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ sudo mkdir readonlyfiles
+$ echo &amp;quot;hello&amp;quot; &amp;gt; readonlyfiles/hi.txt
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Next, we&amp;rsquo;ll create a target directory in our container and bind mount the directory providing the &lt;code&gt;-o ro&lt;/code&gt; argument to make it read-only. If you&amp;rsquo;ve never seen a bind mount before, think of this like a symlink on steroids.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ sudo mkdir -p rootfs/var/readonlyfiles
+$ sudo mount --bind -o ro $PWD/readonlyfiles $PWD/rootfs/var/readonlyfiles
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;The chrooted process can now see the mounted files.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ sudo chroot rootfs /bin/bash
+root@localhost:/# cat /var/readonlyfiles/hi.txt
+hello
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;However, it can&amp;rsquo;t write them.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;root@localhost:/# echo &amp;quot;bye&amp;quot; &amp;gt; /var/readonlyfiles/hi.txt
+bash: /var/readonlyfiles/hi.txt: Read-only file system
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Though a pretty basic example, it can actually be expanded quickly for things like NFS, or in-memory file systems by switching the arguments to &lt;code&gt;mount&lt;/code&gt;.&lt;/p&gt;
+
+&lt;p&gt;Use &lt;code&gt;umount&lt;/code&gt; to remove the bind mount (&lt;code&gt;rm&lt;/code&gt; won&amp;rsquo;t work).&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ sudo umount $PWD/rootfs/var/readonlyfiles
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;cgroups&#34;&gt;cgroups&lt;/h2&gt;
+
+&lt;p&gt;cgroups, short for control groups, allow kernel imposed isolation on resources like memory and CPU. After all, what&amp;rsquo;s the point of isolating processes they can still kill neighbors by hogging RAM?&lt;/p&gt;
+
+&lt;p&gt;The kernel exposes cgroups through the &lt;code&gt;/sys/fs/cgroup&lt;/code&gt; directory. If your machine doesn&amp;rsquo;t have one you may have to &lt;a href=&#34;https://access.redhat.com/documentation/en-US/Red_Hat_Enterprise_Linux/6/html/Resource_Management_Guide/sec-memory.html#memory_example-usage&#34;&gt;mount the memory cgroup&lt;/a&gt; to follow along.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ ls /sys/fs/cgroup/
+blkio  cpuacct      cpuset   freezer  memory   net_cls,net_prio  perf_event  systemd
+cpu    cpu,cpuacct  devices  hugetlb  net_cls  net_prio          pids
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;For this example we&amp;rsquo;ll create a cgroup to restrict the memory of a process. Creating a cgroup is easy, just create a directory. In this case we&amp;rsquo;ll create a memory group called &amp;ldquo;demo&amp;rdquo;. Once created, the kernel fills the directory with files that can be used to configure the cgroup.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ sudo su
+# mkdir /sys/fs/cgroup/memory/demo
+# ls /sys/fs/cgroup/memory/demo/
+cgroup.clone_children               memory.memsw.failcnt
+cgroup.event_control                memory.memsw.limit_in_bytes
+cgroup.procs                        memory.memsw.max_usage_in_bytes
+memory.failcnt                      memory.memsw.usage_in_bytes
+memory.force_empty                  memory.move_charge_at_immigrate
+memory.kmem.failcnt                 memory.numa_stat
+memory.kmem.limit_in_bytes          memory.oom_control
+memory.kmem.max_usage_in_bytes      memory.pressure_level
+memory.kmem.slabinfo                memory.soft_limit_in_bytes
+memory.kmem.tcp.failcnt             memory.stat
+memory.kmem.tcp.limit_in_bytes      memory.swappiness
+memory.kmem.tcp.max_usage_in_bytes  memory.usage_in_bytes
+memory.kmem.tcp.usage_in_bytes      memory.use_hierarchy
+memory.kmem.usage_in_bytes          notify_on_release
+memory.limit_in_bytes               tasks
+memory.max_usage_in_bytes
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;To adjust a value we just have to write to the corresponding file. Let&amp;rsquo;s limit the cgroup to 100MB of memory and turn off swap.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;# echo &amp;quot;100000000&amp;quot; &amp;gt; /sys/fs/cgroup/memory/demo/memory.limit_in_bytes
+# echo &amp;quot;0&amp;quot; &amp;gt; /sys/fs/cgroup/memory/demo/memory.swappiness
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;The &lt;code&gt;talks&lt;/code&gt; file is special, it contains the list of processes which are assigned to the cgroup. To join the cgroup we can write our own PID.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;# echo $$ &amp;gt; /sys/fs/cgroup/memory/demo/tasks
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Finally we need a memory hungry application.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-python&#34;&gt;f = open(&amp;quot;/dev/urandom&amp;quot;, &amp;quot;r&amp;quot;)
+data = &amp;quot;&amp;quot;
+
+i=0
+while True:
+    data += f.read(10000000) # 10mb
+    i += 1
+    print &amp;quot;%dmb&amp;quot; % (i*10,)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;If you&amp;rsquo;ve setup the cgroup correctly, this program won&amp;rsquo;t crash your computer.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;# python hungry.py
+10mb
+20mb
+30mb
+40mb
+50mb
+60mb
+70mb
+80mb
+Killed
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;If that didn&amp;rsquo;t crash your computer, congratulations!&lt;/p&gt;
+
+&lt;p&gt;cgroups can&amp;rsquo;t be removed until every processes in the &lt;code&gt;tasks&lt;/code&gt; file has exited or been reassigned to another group. Exit the shell and remove the directory with &lt;code&gt;rmdir&lt;/code&gt; (don&amp;rsquo;t use &lt;code&gt;rm -r&lt;/code&gt;).&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;# exit
+exit
+$ sudo rmdir /sys/fs/cgroup/memory/demo
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;container-security-and-capabilities&#34;&gt;Container security and capabilities&lt;/h2&gt;
+
+&lt;p&gt;Containers are extremely effective ways of running arbitrary code from the internet as root, and this is where the low overhead of containers hurts us. Containers are significantly easier to break out of than a VM. As a result many technologies used to improve the security of containers, such as SELinux, seccomp, and capabilities involve limiting the power of processes already running as root.&lt;/p&gt;
+
+&lt;p&gt;In this section we&amp;rsquo;ll be exploring &lt;a href=&#34;https://linux.die.net/man/7/capabilities&#34;&gt;Linux capabilities&lt;/a&gt;.&lt;/p&gt;
+
+&lt;p&gt;Consider the following Go program which attempts to listen on port 80.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;package main
+
+import (
+    &amp;quot;fmt&amp;quot;
+    &amp;quot;net&amp;quot;
+    &amp;quot;os&amp;quot;
+)
+
+func main() {
+    if _, err := net.Listen(&amp;quot;tcp&amp;quot;, &amp;quot;:80&amp;quot;); err != nil {
+        fmt.Fprintln(os.Stdout, err)
+        os.Exit(2)
+    }
+    fmt.Println(&amp;quot;success&amp;quot;)
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;What happens when we compile and run this?&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ go build -o listen listen.go
+$ ./listen
+listen tcp :80: bind: permission denied
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Predictably this program fails; listing on port 80 requires permissions we don&amp;rsquo;t have. Of course we can just use &lt;code&gt;sudo&lt;/code&gt;, but we&amp;rsquo;d like to give the binary just the one permission to listen on lower ports.&lt;/p&gt;
+
+&lt;p&gt;Capabilities are a set of discrete powers that together make up everything root can do. This ranges from things like setting the system clock, to kill arbitrary processes. In this case, &lt;code&gt;CAP_NET_BIND_SERVICE&lt;/code&gt; allows executables to listen on lower ports.&lt;/p&gt;
+
+&lt;p&gt;We can grant the executable &lt;code&gt;CAP_NET_BIND_SERVICE&lt;/code&gt; using the &lt;code&gt;setcap&lt;/code&gt; command.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ sudo setcap cap_net_bind_service=+ep listen
+$ getcap listen
+listen = cap_net_bind_service+ep
+$ ./listen
+success
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;For things already running as root, like most containerized apps, we&amp;rsquo;re more interested in taking capabilities away than granting them. First let&amp;rsquo;s see all powers our root shell has:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ sudo su
+# capsh --print
+Current: = cap_chown,cap_dac_override,cap_dac_read_search,cap_fowner,cap_fsetid,cap_kill,cap_setgid,cap_setuid,cap_setpcap,cap_linux_immutable,cap_net_bind_service,cap_net_broadcast,cap_net_admin,cap_net_raw,cap_ipc_lock,cap_ipc_owner,cap_sys_module,cap_sys_rawio,cap_sys_chroot,cap_sys_ptrace,cap_sys_pacct,cap_sys_admin,cap_sys_boot,cap_sys_nice,cap_sys_resource,cap_sys_time,cap_sys_tty_config,cap_mknod,cap_lease,cap_audit_write,cap_audit_control,cap_setfcap,cap_mac_override,cap_mac_admin,cap_syslog,cap_wake_alarm,cap_block_suspend,37+ep
+Bounding set =cap_chown,cap_dac_override,cap_dac_read_search,cap_fowner,cap_fsetid,cap_kill,cap_setgid,cap_setuid,cap_setpcap,cap_linux_immutable,cap_net_bind_service,cap_net_broadcast,cap_net_admin,cap_net_raw,cap_ipc_lock,cap_ipc_owner,cap_sys_module,cap_sys_rawio,cap_sys_chroot,cap_sys_ptrace,cap_sys_pacct,cap_sys_admin,cap_sys_boot,cap_sys_nice,cap_sys_resource,cap_sys_time,cap_sys_tty_config,cap_mknod,cap_lease,cap_audit_write,cap_audit_control,cap_setfcap,cap_mac_override,cap_mac_admin,cap_syslog,cap_wake_alarm,cap_block_suspend,37
+Securebits: 00/0x0/1&#39;b0
+ secure-noroot: no (unlocked)
+ secure-no-suid-fixup: no (unlocked)
+ secure-keep-caps: no (unlocked)
+uid=0(root)
+gid=0(root)
+groups=0(root)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Yeah, that&amp;rsquo;s a lot of capabilities.&lt;/p&gt;
+
+&lt;p&gt;As an example, we&amp;rsquo;ll use &lt;code&gt;capsh&lt;/code&gt; to drop a few capabilities including &lt;code&gt;CAP_CHOWN&lt;/code&gt;. If things work as expected, our shell shouldn&amp;rsquo;t be able to modify file ownership despite being root.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ sudo capsh --drop=cap_chown,cap_setpcap,cap_setfcap,cap_sys_admin --chroot=$PWD/rootfs --
+root@localhost:/# whoami
+root
+root@localhost:/# chown nobody /bin/ls
+chown: changing ownership of &#39;/bin/ls&#39;: Operation not permitted
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Conventional wisdom still states that VMs isolation is mandatory when running untrusted code. But security features like capabilities are important to protect against hacked applications running in containers.&lt;/p&gt;
+
+&lt;p&gt;Beyond more elaborate tools like seccomp, SELinux, and capabilities, applications running in containers generally benefit from the same kind of best practices as applications running outside of one. Know what your linking against, don&amp;rsquo;t run as root in your container, update for known security issues in a timely fashion.&lt;/p&gt;
+
+&lt;h2 id=&#34;conclusion&#34;&gt;Conclusion&lt;/h2&gt;
+
+&lt;p&gt;Containers aren&amp;rsquo;t magic. Anyone with a Linux machine can play around with them and tools like Docker and rkt are just wrappers around things built into every modern kernel. No, you probably shouldn&amp;rsquo;t go and implement your own container runtime. But having a better understanding of these lower level technologies will help you work with these higher level tools (especially when debugging).&lt;/p&gt;
+
+&lt;p&gt;There&amp;rsquo;s a ton of topics I wasn&amp;rsquo;t able to cover today, networking and copy-on-write file systems probably being the biggest two. However, I hope this acts as a good starting point for anyone wanting to get their hands dirty. Happy hacking!&lt;/p&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>A Let&#39;s Encrypt Client for Go</title>
+      <link>https://ericchiang.github.io/post/go-letsencrypt/</link>
+      <pubDate>Fri, 13 Nov 2015 00:00:00 +0000</pubDate>
+      
+      <guid>https://ericchiang.github.io/post/go-letsencrypt/</guid>
+      <description>
+
+&lt;p&gt;&lt;small&gt;Just want to jump into the GitHub project? &lt;a href=&#34;https://github.com/ericchiang/letsencrypt&#34;&gt;Click here&lt;/a&gt;.&lt;/small&gt;&lt;/p&gt;
+
+&lt;p&gt;If you haven&amp;rsquo;t heard, &lt;a href=&#34;https://letsencrypt.org/&#34;&gt;Let&amp;rsquo;s Encrypt&lt;/a&gt; is trying to secure the internet with automated and free TLS certificates.&lt;/p&gt;
+
+&lt;p&gt;In preperation for the Public Beta in December, I&amp;rsquo;ve written a simple client in Go which you can go get on &lt;a href=&#34;https://github.com/ericchiang/letsencrypt&#34;&gt;GitHub&lt;/a&gt;. This post uses that client to take you through the workflow of signing up, completing challenges, and requesting certificates. Let&amp;rsquo;s Encrypt!&lt;/p&gt;
+
+&lt;p&gt;For these examples, I&amp;rsquo;ve spun up a &lt;a href=&#34;https://github.com/letsencrypt/boulder&#34;&gt;Let&amp;rsquo;s Encrypt server&lt;/a&gt; in dev mode on my local machine, made some edits to the server&amp;rsquo;s configuration, and added an entry to my &lt;code&gt;/etc/hosts&lt;/code&gt;. See details &lt;a href=&#34;https://github.com/ericchiang/letsencrypt#running-the-tests&#34;&gt;here&lt;/a&gt; if you want to follow along.&lt;/p&gt;
+
+&lt;h2 id=&#34;step-1-registration&#34;&gt;Step 1: Registration&lt;/h2&gt;
+
+&lt;p&gt;To start the client registers a key pair with the server, then uses the private key to sign all future messages and confirm its identity.&lt;/p&gt;
+
+&lt;p&gt;First let&amp;rsquo;s generate a key pair for our account.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-nohighlight&#34;&gt;ssh-keygen -t rsa -b 4096 -C &amp;quot;your_email@example.com&amp;quot; -f letsencrypt -N &#39;&#39;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Then we&amp;rsquo;ll load the private key and register it with the server.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;package main
+
+import (
+	// hint, hint: use goimports to fill in the imports
+
+	&amp;quot;github.com/ericchiang/letsencrypt&amp;quot;
+)
+
+func main() {
+	// Create a client.
+	cli, err := letsencrypt.NewClient(&amp;quot;http://localhost:4000/directory&amp;quot;)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Load the private key and register with the ACME server.
+	key, err := loadKey(&amp;quot;letsencrypt&amp;quot;)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if _, err := cli.NewRegistration(key); err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println(&amp;quot;Registration successful!&amp;quot;)
+}
+
+// loadKey reads and parses a private RSA key.
+func loadKey(file string) (*rsa.PrivateKey, error) {
+	data, err := ioutil.ReadFile(file)
+	if err != nil {
+		return nil, err
+	}
+	block, _ := pem.Decode(data)
+	if block == nil {
+		return nil, errors.New(&amp;quot;pem decode: no key found&amp;quot;)
+	}
+	return x509.ParsePKCS1PrivateKey(block.Bytes)
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Nothing too crazy yet.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-nohighlight&#34;&gt;$ go run step1.go
+Registration successful!
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;step-2-requesting-challenges&#34;&gt;Step 2: Requesting challenges&lt;/h2&gt;
+
+&lt;p&gt;Once we&amp;rsquo;ve registered a key pair the next step is to begin a challenge for a specific domain. In this case we&amp;rsquo;ll be asking for the DNS name &lt;code&gt;example.org&lt;/code&gt;.&lt;/p&gt;
+
+&lt;p&gt;The server responds to an authorization request with a list of challenges supported for that domain and a list of combinations of challenges to perform. We&amp;rsquo;ll print the response and take a look at the results.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;auth, _, err := cli.NewAuthorization(key, &amp;quot;dns&amp;quot;, &amp;quot;example.org&amp;quot;)
+if err != nil {
+	log.Fatal(err)
+}
+
+fmt.Println(&amp;quot;Challenges:&amp;quot;)
+for _, chal := range auth.Challenges {
+	fmt.Println(chal.Type, chal.URI)
+}
+fmt.Println(&amp;quot;Combinations:&amp;quot;)
+for _, comb := range auth.Combs {
+	fmt.Println(comb)
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-nohighlight&#34;&gt;$ go run step2.go 
+Challenges:
+simpleHttp http://127.0.0.1:4000/acme/challenge/aOOnrY65LHMSYK6HftGeK795dqEII40NYGVESqqKmGA/1
+dvsni http://127.0.0.1:4000/acme/challenge/aOOnrY65LHMSYK6HftGeK795dqEII40NYGVESqqKmGA/2
+http-01 http://127.0.0.1:4000/acme/challenge/aOOnrY65LHMSYK6HftGeK795dqEII40NYGVESqqKmGA/3
+tls-sni-01 http://127.0.0.1:4000/acme/challenge/aOOnrY65LHMSYK6HftGeK795dqEII40NYGVESqqKmGA/4
+Combinations:
+[0]
+[1]
+[2]
+[3]
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;The server has issued four different challenges for the domain name.&lt;/p&gt;
+
+&lt;p&gt;Since &lt;code&gt;simpleHttp&lt;/code&gt; and &lt;code&gt;dvsni&lt;/code&gt; are depricated we care about &lt;code&gt;http-01&lt;/code&gt; and &lt;code&gt;tls-sni-01&lt;/code&gt;. The first is a challenge to provision an HTTP response at a given path for the domain, the second requires some trickery with TLS Server Name Identification.&lt;/p&gt;
+
+&lt;p&gt;The &lt;code&gt;Combinations&lt;/code&gt; field displays the set of challenges a client can complete to prove ownership over a domain. In this case, completing any of the challenges is enough.&lt;/p&gt;
+
+&lt;h2 id=&#34;step-3-complete-a-challenge&#34;&gt;Step 3: Complete a challenge&lt;/h2&gt;
+
+&lt;p&gt;The server has now challenged us to provision either an HTTP or TLS resource. It&amp;rsquo;s our turn to do so then inform the server we&amp;rsquo;re ready.&lt;/p&gt;
+
+&lt;p&gt;Let&amp;rsquo;s take a look at the HTTP challenge.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;// grab the HTTP challenge again
+httpChalURL := &amp;quot;http://127.0.0.1:4000/acme/challenge/aOOnrY65LHMSYK6HftGeK795dqEII40NYGVESqqKmGA/3&amp;quot;
+chal, err := cli.Challenge(httpChalURL)
+if err != nil {
+	log.Fatal(err)
+}
+
+// print the challenge
+out, err := json.MarshalIndent(&amp;amp;chal, &amp;quot;&amp;quot;, &amp;quot;  &amp;quot;)
+if err != nil {
+	log.Fatal(err)
+}
+fmt.Printf(&amp;quot;%s\n&amp;quot;, out)
+
+// get the challenge details
+path, resource, err := chal.HTTP(key)
+if err != nil {
+	log.Fatal(err)
+}
+fmt.Println(&amp;quot;Path:    &amp;quot;, path)
+fmt.Println(&amp;quot;Resource:&amp;quot;, resource)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-nohighlight&#34;&gt;$ go run step3.go 
+{
+  &amp;quot;type&amp;quot;: &amp;quot;http-01&amp;quot;,
+  &amp;quot;uri&amp;quot;: &amp;quot;http://127.0.0.1:4000/acme/challenge/aOOnrY65LHMSYK6HftGeK795dqEII40NYGVESqqKmGA/3&amp;quot;,
+  &amp;quot;status&amp;quot;: &amp;quot;pending&amp;quot;,
+  &amp;quot;token&amp;quot;: &amp;quot;1UMQfJKJWZwOmisxPTso_nR9tEP_42PHsq3EcibGbtE&amp;quot;
+}
+Path:     /.well-known/acme-challenge/1UMQfJKJWZwOmisxPTso_nR9tEP_42PHsq3EcibGbtE
+Resource: 1UMQfJKJWZwOmisxPTso_nR9tEP_42PHsq3EcibGbtE.wF6w7g9k8byiDJcjhwNpLP883uGpxGZL0NdPTEy5PSc
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;As you can see the server has returned a challenge of type &lt;code&gt;http-01&lt;/code&gt; and a token. &lt;a href=&#34;https://tools.ietf.org/html/draft-ietf-acme-acme-01#section-7.2&#34;&gt;The spec&lt;/a&gt; documents how to combine that token with the client&amp;rsquo;s private key into a URL path and a HTTP response.&lt;/p&gt;
+
+&lt;p&gt;To actually serve the file, we&amp;rsquo;ll need to spin up a HTTP server on the domain we&amp;rsquo;ve requested. We then notify the server that the challenge is ready for verification, and poll the challenge until we get a result.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;go func() {
+	// serve the resource at the given path
+	http.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
+		io.WriteString(w, resource)
+	})
+	// Start the HTTP server.
+	// The test Let&#39;s Encrypt server uses port 5002 instead of 80.
+	log.Fatal(http.ListenAndServe(&amp;quot;:5002&amp;quot;, nil))
+}()
+
+if err := cli.ChallengeReady(key, chal); err != nil {
+	log.Fatal(err)
+}
+fmt.Println(&amp;quot;You&#39;ve completed the challenge!&amp;quot;)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-nohighlight&#34;&gt;$ go run step3.go 
+You&#39;ve completed the challenge!
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;And that&amp;rsquo;s it. We&amp;rsquo;ve provisioned the resource, the server checked that it was there, and the challenge has been verified.&lt;/p&gt;
+
+&lt;p&gt;For examples of completing other challenges, see the &lt;a href=&#34;https://github.com/ericchiang/letsencrypt#challenges&#34;&gt;README&lt;/a&gt;.&lt;/p&gt;
+
+&lt;h2 id=&#34;step-4-getting-a-certificate&#34;&gt;Step 4: Getting a certificate&lt;/h2&gt;
+
+&lt;p&gt;Once we&amp;rsquo;ve completed a set of combinations, the server will finally issue us a certificate. This comes in two steps.&lt;/p&gt;
+
+&lt;p&gt;First, the client generates a certificate request. This holds information like which domain we want a certificate for, what public key it will use, and what algorithms the server should use to sign it. Second, we send the certificate request to server and (if all goes well) it will respond with a certificate.&lt;/p&gt;
+
+&lt;h3 id=&#34;step-4-1-creating-a-certificate-request&#34;&gt;Step 4.1: Creating a certificate request&lt;/h3&gt;
+
+&lt;p&gt;You can use tools like &lt;code&gt;openssl&lt;/code&gt; to generate these request. But since we&amp;rsquo;re talking Go, here&amp;rsquo;s how you make one using the standard library.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;package main
+
+import (
+	// ...
+)
+
+func main() {
+	certKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	template := &amp;amp;x509.CertificateRequest{
+		SignatureAlgorithm: x509.SHA256WithRSA,
+		PublicKeyAlgorithm: x509.RSA,
+		PublicKey:          &amp;amp;certKey.PublicKey,
+		Subject:            pkix.Name{CommonName: &amp;quot;example.org&amp;quot;},
+		DNSNames:           []string{&amp;quot;example.org&amp;quot;},
+	}
+	csrDER, err := x509.CreateCertificateRequest(rand.Reader, template, certKey)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	pemEncode := func(b []byte, t string) []byte {
+		return pem.EncodeToMemory(&amp;amp;pem.Block{Bytes: b, Type: t})
+	}
+
+	keyPEM := pemEncode(x509.MarshalPKCS1PrivateKey(certKey), &amp;quot;RSA PRIVATE KEY&amp;quot;)
+	csrPEM := pemEncode(csrDER, &amp;quot;CERTIFICATE REQUEST&amp;quot;)
+
+	if err := ioutil.WriteFile(&amp;quot;example.org.csr&amp;quot;, csrPEM, 0644); err != nil {
+		log.Fatal(err)
+	}
+	if err := ioutil.WriteFile(&amp;quot;example.org.key&amp;quot;, keyPEM, 0644); err != nil {
+		log.Fatal(err)
+	}
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Running this will create &lt;code&gt;example.org.csr&lt;/code&gt; and &lt;code&gt;example.org.key&lt;/code&gt;.&lt;/p&gt;
+
+&lt;h3 id=&#34;step-4-2-requesting-a-certificate&#34;&gt;Step 4.2: Requesting a certificate&lt;/h3&gt;
+
+&lt;p&gt;Finally we sign the certificate request using our account&amp;rsquo;s key (not the one used to generate the request) and send it to the server. Since the account associated with the key has completed the challenges for the domain we&amp;rsquo;ve requested, it should issue us a certificate.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;package main
+
+import (
+	// ...
+
+	&amp;quot;github.com/ericchiang/letsencrypt&amp;quot;
+)
+
+func main() {
+	cli, err := letsencrypt.NewClient(&amp;quot;http://localhost:4000/directory&amp;quot;)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// load the account&#39;s private key and the certificate request
+	key, err := loadKey(&amp;quot;letsencrypt&amp;quot;)
+	if err != nil {
+		log.Fatal(err)
+	}
+	csr, err := loadCSR(&amp;quot;example.org.csr&amp;quot;)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// ask for a new certifiate
+	cert, err := cli.NewCertificate(key, csr)
+	if err != nil {
+		log.Fatal(err)
+	}
+	data := pem.EncodeToMemory(&amp;amp;pem.Block{Bytes: cert.Raw, Type: &amp;quot;CERTIFICATE&amp;quot;})
+	if err := ioutil.WriteFile(&amp;quot;example.org.crt&amp;quot;, data, 0644); err != nil {
+		log.Fatal(err)
+	}
+}
+
+func loadKey(file string) (*rsa.PrivateKey, error) {
+	data, err := ioutil.ReadFile(file)
+	if err != nil {
+		return nil, err
+	}
+	block, _ := pem.Decode(data)
+	if block == nil {
+		return nil, errors.New(&amp;quot;pem decode: no key found&amp;quot;)
+	}
+	return x509.ParsePKCS1PrivateKey(block.Bytes)
+}
+
+func loadCSR(file string) (*x509.CertificateRequest, error) {
+	data, err := ioutil.ReadFile(file)
+	if err != nil {
+		return nil, err
+	}
+	block, _ := pem.Decode(data)
+	if block == nil {
+		return nil, errors.New(&amp;quot;pem decode: no key found&amp;quot;)
+	}
+	return x509.ParseCertificateRequest(block.Bytes)
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-nohighlight&#34;&gt;$ go run step4.go 
+$ cat example.org.crt
+-----BEGIN CERTIFICATE-----
+MIIEVzCCAz+gAwIBAgITAP9Jk5pSbvv6cgNUQrFxf/pzITANBgkqhkiG9w0BAQsF
+ADAfMR0wGwYDVQQDExRoYXBweSBoYWNrZXIgZmFrZSBDQTAeFw0xNTExMTMyMDAx
+MDBaFw0xNjAyMTEyMDAxMDBaMBYxFDASBgNVBAMTC2V4YW1wbGUub3JnMIIBIjAN
+BgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAwGoE3CugCDyiUflgcaRRi7Zmll39
+G4zNMFhsV++rlH5OBb0ChFrEESyQfgH9trNlyRrTSB9qm8JMhDfHS9Fx9taAesYB
+XxPGrjcPnWFEgOGZ+CuN6R2akR7LMPuZ4vaoC/y1kMg/ixYa6agsrgoi14OGkOhy
+FhwklqsywCUtCBHYDaXVn+Fd4ivukw7nHeBxn5KxdQsItB9EuOukTe1i+fkmvFob
+ESigpUO+stDPyKEvuT0WHetTD44MqlBJA2fD2Cl232ZIVr/QZOyUxet1SjcWoWdb
+X/BvNpXHvUM+WYggwVRpYea142o/Q2RbttovyhA8fRO2/m6bc2IQryWL0wIDAQAB
+o4IBkzCCAY8wDgYDVR0PAQH/BAQDAgWgMB0GA1UdJQQWMBQGCCsGAQUFBwMBBggr
+BgEFBQcDAjAMBgNVHRMBAf8EAjAAMB0GA1UdDgQWBBT1ynbTWvxbpnI9LR7i1p1p
+pt5OhzAfBgNVHSMEGDAWgBT7eE8S+WAVgyyfF380GbMuNupBiTBqBggrBgEFBQcB
+AQReMFwwJgYIKwYBBQUHMAGGGmh0dHA6Ly8xMjcuMC4wLjE6NDAwMi9vY3NwMDIG
+CCsGAQUFBzAChiZodHRwOi8vMTI3LjAuMC4xOjQwMDAvYWNtZS9pc3N1ZXItY2Vy
+dDAWBgNVHREEDzANggtleGFtcGxlLm9yZzAnBgNVHR8EIDAeMBygGqAYhhZodHRw
+Oi8vZXhhbXBsZS5jb20vY3JsMGMGA1UdIARcMFowCgYGZ4EMAQIBMAAwTAYDKgME
+MEUwIgYIKwYBBQUHAgEWFmh0dHA6Ly9leGFtcGxlLmNvbS9jcHMwHwYIKwYBBQUH
+AgIwEwwRRG8gV2hhdCBUaG91IFdpbHQwDQYJKoZIhvcNAQELBQADggEBAHUcscRK
+WYkWiTmtJY2cvNdpYU6bYKFhS4Mpkj96MnoWQM9o3ScrLdqdmsH6ObRuK2268M8g
+8wH7LqkcUC/4Fn0+nO1b0nSJnZUqtr4l9RvtXceJfIJ8J9/l5MEkWuv/U+V4BuI7
+Jo7uOCpEQkh+Rm4SSxRXL0ra69UljUKWkKqf6Ln5Pt74jR8VYBwiBpV9p3aoStwr
+waSqKijW4zg5U5n66Ypb5CXRw+0LOtV+U64Fd9ifGBVReNRxvx+k23+3/3YO38YW
+rqbQUkp9UsCPuWlxTNXHefV0D/p2SmwAa2No7b7WxXV37nGH+5Uh+rUBsIQ18JOy
+IeNqHO/uy/bkmCg=
+-----END CERTIFICATE-----
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Holy moley, it worked.&lt;/p&gt;
+
+&lt;h2 id=&#34;conclusion&#34;&gt;Conclusion&lt;/h2&gt;
+
+&lt;p&gt;This Go client isn&amp;rsquo;t a &amp;ldquo;one click TLS&amp;rdquo; tool like Let&amp;rsquo;s Encrypt&amp;rsquo;s existing &lt;a href=&#34;https://github.com/letsencrypt/letsencrypt&#34;&gt;command line application&lt;/a&gt;, but hopefully provides building blocks for similar Go programs. It should also give users the tooling to deal with challenges in custom ways, particularly for those with existing websites that they wish to secure.&lt;/p&gt;
+
+&lt;p&gt;The &lt;a href=&#34;https://letsencrypt.org/2015/11/12/public-beta-timing.html&#34;&gt;upcoming Public Beta&lt;/a&gt; on December 3rd will be a huge step for the Let&amp;rsquo;s Encrypt project and hopefully make HTTPS easier and easier for everyone. Even if you never use the Go package, go check them out!&lt;/p&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>Testing Databases with Docker</title>
+      <link>https://ericchiang.github.io/post/testing-dbs-with-docker/</link>
+      <pubDate>Mon, 14 Sep 2015 00:00:00 +0000</pubDate>
+      
+      <guid>https://ericchiang.github.io/post/testing-dbs-with-docker/</guid>
+      <description>
+
+&lt;p&gt;Databases, authentication management, metric aggregators; there&amp;rsquo;s a service or API for everything.&lt;/p&gt;
+
+&lt;p&gt;There&amp;rsquo;s also a place called dependency hell.&lt;/p&gt;
+
+&lt;p&gt;Dependency hell. Where it&amp;rsquo;s impossible to run a test on your laptop. Where bugs are found by running a main, clicking around, and seeing what breaks. Where you cross your fingers and pray that new versions don&amp;rsquo;t break everything. Where we use mocks and stubs to combat a growing technology stack.&lt;/p&gt;
+
+&lt;p&gt;But why mock when you can have the real thing?&lt;/p&gt;
+
+&lt;p&gt;This post is about using Docker in test infrastructure. To run the code you&amp;rsquo;ll need:&lt;/p&gt;
+
+&lt;ol&gt;
+&lt;li&gt;Go&lt;/li&gt;
+&lt;li&gt;Docker running on your host machine (not boot2docker - sorry OS X and Windows users)&lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;h2 id=&#34;an-example-using-postgres&#34;&gt;An example using Postgres&lt;/h2&gt;
+
+&lt;p&gt;I work at a company that has a Go project that uses Postgres. How do you test database code? Maybe you can convince all of your employees to install Postgres with the exact same configuration. Maybe you could use SQLite to reduce dev setup times (never do this).&lt;/p&gt;
+
+&lt;p&gt;Of course with the awesomeness of Linux containers you just need to use Docker!&lt;/p&gt;
+
+&lt;p&gt;The workflow we&amp;rsquo;re looking for: for each test, start a fresh instance of Postgres in a Docker container, then run the tests using it.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;dockerContainer, err := NewPostgresDB()
+if err != nil {
+	// handle error
+}
+defer destroy(dockerContainer)
+
+// run test
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;For our code, the Postgres struct will look like this. There&amp;rsquo;s only two bits of information that it&amp;rsquo;ll hold, the port the container is running on and the ID of the container.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;type PostgresDB struct {
+	// Of form &#39;host:port&#39;
+	Host string
+
+	// The container id assigned by docker
+	cid string
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;postgres-docker-images&#34;&gt;Postgres&amp;rsquo; Docker images&lt;/h2&gt;
+
+&lt;p&gt;Postgres has an &lt;a href=&#34;https://hub.docker.com/_/postgres/&#34;&gt;official image&lt;/a&gt; through Docker Hub. Most databases do.&lt;/p&gt;
+
+&lt;p&gt;Starting a container is easy using Docker and will look something like the following.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-nohighlight&#34;&gt;docker run -d -p $HOSTPORT:5432 -e POSTGRES_PASSWORD=$PASS postgres:$VERSION
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;The &lt;code&gt;-p&lt;/code&gt; flag requests an exposed port and, because Postgres runs on port &lt;code&gt;5432&lt;/code&gt;, we need to map &lt;code&gt;5432&lt;/code&gt; to the host machine. &lt;code&gt;-d&lt;/code&gt; indicates &amp;ldquo;detached mode,&amp;rdquo; and &lt;code&gt;-e&lt;/code&gt; is used to specify environment variables.&lt;/p&gt;
+
+&lt;p&gt;The actual image allows for a bit of configuration through the env. This will be another struct.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;type PostgresConfig struct {
+	Password string
+	Username string // defaults to &amp;quot;postgres&amp;quot;
+	Database string // defaults to &amp;quot;username&amp;quot;
+	Version  string // defaults to &amp;quot;latest&amp;quot;
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;To create an instance of Postgres, we&amp;rsquo;ll determine Docker&amp;rsquo;s command line arguments given a config. Then run the Docker command through Go&amp;rsquo;s &lt;code&gt;os/exec&lt;/code&gt; library.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;func NewPostgresDB(c PostgresConfig) (*PostgresDB, error) {
+	img := &amp;quot;postgres:latest&amp;quot;
+	if c.Version == &amp;quot;&amp;quot; {
+		img = &amp;quot;postgres:&amp;quot; + c.Version
+	}
+
+	// docker&#39;s run command has the nasty habbit of pulling images if you don&#39;t have them.
+	// Warn user they need to pull the image, don&#39;t automatically pull for them.
+	if exec.Command(&amp;quot;docker&amp;quot;, &amp;quot;inspect&amp;quot;, img).Run() != nil {
+		return nil, fmt.Errorf(&amp;quot;db requires docker image %s, please pull or specify a different version&amp;quot;, img)
+	}
+
+	// Running on port 0 instructs the operating system to pick an available port.
+	dockerArgs := []string{&amp;quot;run&amp;quot;, &amp;quot;-d&amp;quot;, &amp;quot;-p&amp;quot;, &amp;quot;127.0.0.1:0:5432&amp;quot;}
+	envvars := map[string]string{
+		&amp;quot;POSTGRES_PASSWORD&amp;quot;: c.Password,
+		&amp;quot;POSTGRES_USER&amp;quot;:     c.Username,
+		&amp;quot;POSTGRES_DB&amp;quot;:       c.Database,
+	}
+	for key, val := range envvars {
+		if val != &amp;quot;&amp;quot; {
+			dockerArgs = append(dockerArgs, &amp;quot;-e&amp;quot;, key+&amp;quot;=&amp;quot;+val)
+		}
+	}
+	dockerArgs = append(dockerArgs, img)
+
+	// Start the docker container.
+	out, err := exec.Command(&amp;quot;docker&amp;quot;, dockerArgs...).CombinedOutput()
+	if err != nil {
+		return nil, fmt.Errorf(&amp;quot;docker run: %v: %s&amp;quot;, err, out)
+	}
+	cid := strings.TrimSpace(string(out))
+	db := &amp;amp;PostgresDB{cid: cid}
+
+	db.Host, err = portMapping(cid, &amp;quot;5432/tcp&amp;quot;)
+	if err != nil {
+		db.Close()
+		return nil, err
+	}
+	return db, nil
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;The host address specified above is &lt;code&gt;127.0.0.1:0&lt;/code&gt;. Port 0 is a way of telling the operating system to pick any available port. For testing it&amp;rsquo;s nice to not hard code an explicit port in case the person running the tests has a conflicting service (like an actually Postgres database).&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;docker inspect&lt;/code&gt; allows us figure out what port the operating system chose. This returns a giant JSON object with, among other things, network settings for the running container.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;func portMapping(cid, containerPort string) (hostAddr string, err error) {
+	out, err := exec.Command(&amp;quot;docker&amp;quot;, &amp;quot;inspect&amp;quot;, cid).CombinedOutput()
+	if err != nil {
+		return &amp;quot;&amp;quot;, fmt.Errorf(&amp;quot;docker inspect: %v: %s&amp;quot;, err, out)
+	}
+
+	// anonymous struct for unmarshalling JSON into
+	var inspectResp []struct {
+		NetworkSettings struct {
+			Ports map[string][]struct {
+				HostIp   string
+				HostPort string
+			}
+		}
+	}
+	if err := json.Unmarshal(out, &amp;amp;inspectResp); err != nil {
+		return &amp;quot;&amp;quot;, fmt.Errorf(&amp;quot;decoding docker inspect result failed: %v: %s&amp;quot;, err, out)
+	}
+	if len(inspectResp) != 1 {
+		return &amp;quot;&amp;quot;, fmt.Errorf(&amp;quot;expected one inspect result, got %d&amp;quot;, len(inspectResp))
+	}
+	ports := inspectResp[0].NetworkSettings.Ports[containerPort]
+	if len(ports) != 1 {
+		return &amp;quot;&amp;quot;, fmt.Errorf(&amp;quot;expected one port mapping, got %d&amp;quot;, len(ports))
+	}
+	return ports[0].HostIp + &amp;quot;:&amp;quot; + ports[0].HostPort, nil
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Finally, closing the database should result in the entire container being removed. Again, we&amp;rsquo;ll just use &lt;code&gt;os/exec&lt;/code&gt; to call Docker.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;// Close removes the container running the postgres database.
+func (db *PostgresDB) Close() error {
+	out, err := exec.Command(&amp;quot;docker&amp;quot;, &amp;quot;rm&amp;quot;, &amp;quot;-f&amp;quot;, db.cid).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf(&amp;quot;docker rm: %v: %s&amp;quot;, err, out)
+	}
+	return nil
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;writing-a-test-helper&#34;&gt;Writing a test helper&lt;/h2&gt;
+
+&lt;p&gt;Go tests always have a signature like this:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;func TestXyz(t *testing.T)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;We want to write tests that take a database connection as well. Something that looks like this:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;type DBTest func(t *testing.T, conn *sql.DB)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;So let&amp;rsquo;s write a function to run a &lt;code&gt;DBTest&lt;/code&gt;. This steps will be&lt;/p&gt;
+
+&lt;ol&gt;
+&lt;li&gt;Create a container&lt;/li&gt;
+&lt;li&gt;Connect to the container&lt;/li&gt;
+&lt;li&gt;Run a test with the connection&lt;/li&gt;
+&lt;li&gt;Clean up the container&lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;p&gt;Importing the &lt;a href=&#34;https://github.com/lib/pq&#34;&gt;&lt;code&gt;github.com/lib/pq&lt;/code&gt;&lt;/a&gt; driver is enough to connect to the container. While the code we used before will create and clean up a new instance of Postgres for each test.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;import (
+	// other imports
+
+	_ &amp;quot;github.com/lib/pq&amp;quot; // &amp;quot;empty import&amp;quot; to register driver with database/sql
+)
+
+type DBTest func(t *testing.T, conn *sql.DB)
+
+func RunDBTest(t *testing.T, dbVersion string, test DBTest) {
+	c := PostgresConfig{&amp;quot;pass&amp;quot;, &amp;quot;eric&amp;quot;, &amp;quot;postgrestest&amp;quot;, dbVersion}
+
+	// create a postgres container
+	db, err := NewPostgresDB(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close() // destroy the postgres container after the test
+
+	// create a connection URL
+	// http://www.postgresql.org/docs/current/static/libpq-connect.html#LIBPQ-CONNSTRING
+	connURL := &amp;amp;url.URL{
+		Scheme:   &amp;quot;postgres&amp;quot;,
+		User:     url.UserPassword(c.Username, c.Password),
+		Host:     db.Host,
+		Path:     &amp;quot;/&amp;quot; + c.Database,
+		RawQuery: &amp;quot;sslmode=disable&amp;quot;,
+	}
+
+	// connect to database
+	conn, err := sql.Open(&amp;quot;postgres&amp;quot;, connURL.String())
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer conn.Close()
+
+	// ping the database until it comes up
+	timeout := time.Now().Add(time.Second * 20)
+	for time.Now().Before(timeout) {
+		if err = conn.Ping(); err == nil {
+			// yay! we&#39;ve connected to the database, time to run the test
+			test(t, conn)
+			return
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	t.Errorf(&amp;quot;failed to connect to database: %v&amp;quot;, err)
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;time-to-write-the-tests&#34;&gt;Time to write the tests&lt;/h2&gt;
+
+&lt;p&gt;Finally we can just write tests that adhere to &lt;code&gt;DBTest&lt;/code&gt;&amp;rsquo;s function signature and run them with &lt;code&gt;RunDBTest&lt;/code&gt;. Let&amp;rsquo;s test creating a table and inserting a record.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;package dbtest
+
+import (
+	&amp;quot;database/sql&amp;quot;
+	&amp;quot;testing&amp;quot;
+
+	_ &amp;quot;github.com/lib/pq&amp;quot;
+)
+
+func createTable(conn *sql.DB) error {
+	statement := `
+		CREATE TABLE Worker (
+			WorkerId SERIAL PRIMARY KEY,
+			Host     TEXT NOT NULL,
+			UsingTLS BOOLEAN NOT NULL
+		);`
+	_, err := conn.Exec(statement)
+	return err
+}
+
+// Test creating a table
+func testCreateTable(t *testing.T, conn *sql.DB) {
+	if err := createTable(conn); err != nil {
+		t.Error(err)
+	}
+}
+
+// Test creating a table then inserting a row
+func testInsertWorker(t *testing.T, conn *sql.DB) {
+	if err := createTable(conn); err != nil {
+		t.Error(err)
+		return
+	}
+	insertWorker := `INSERT INTO Worker (Host, UsingTLS) VALUES ($1, $2);`
+	if _, err := conn.Exec(insertWorker, &amp;quot;10.0.0.3&amp;quot;, true); err != nil {
+		t.Error(err)
+	}
+}
+
+// Test multiple versions of Postgres
+const (
+	version94 = &amp;quot;9.4&amp;quot;
+	version95 = &amp;quot;9.5&amp;quot;
+)
+
+// The actual Go tests just immediately call RunDBTest
+func TestCreateTable94(t *testing.T)  { RunDBTest(t, version94, testCreateTable) }
+func TestCreateTable95(t *testing.T)  { RunDBTest(t, version95, testCreateTable) }
+func TestInsertWorker94(t *testing.T) { RunDBTest(t, version94, testInsertWorker) }
+func TestInsertWorker95(t *testing.T) { RunDBTest(t, version95, testInsertWorker) }
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;This setup enables a bunch of cool things like tests against different versions of Postgres. Once we (or importantly, one of our coworkers) have pulled the correct Postgres images, we just have to run &lt;code&gt;go test&lt;/code&gt;. The only dependencies are Go and Docker.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-nohighlight&#34;&gt;$ go test -v
+=== RUN   TestCreateTable94
+--- PASS: TestCreateTable94 (6.21s)
+=== RUN   TestCreateTable95
+--- PASS: TestCreateTable95 (6.09s)
+=== RUN   TestInsertWorker94
+--- PASS: TestInsertWorker94 (5.97s)
+=== RUN   TestInsertWorker95
+--- PASS: TestInsertWorker95 (5.83s)
+PASS
+ok  	_/p/go/dbtest	24.106s
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;It&amp;rsquo;s not blindingly fast, but most of the overhead is from Postgres&amp;rsquo; &lt;a href=&#34;https://github.com/docker-library/postgres/blob/87b8be7e9b324ff2bcd6545d05895fac8f012dac/9.5/docker-entrypoint.sh&#34;&gt;initialization&lt;/a&gt;, not Docker. If you know your configuration ahead of time, it&amp;rsquo;s easy to make a custom Docker image and speed things up.&lt;/p&gt;
+
+&lt;p&gt;Importantly, we&amp;rsquo;re testing against full installations of Postgres 9.4 and 9.5. No mocks, no sqlite.&lt;/p&gt;
+
+&lt;h2 id=&#34;things-other-than-databases&#34;&gt;Things other than databases&lt;/h2&gt;
+
+&lt;p&gt;This strategy is absolutely &lt;em&gt;not&lt;/em&gt; limited to databases, and gets even cooler when you expand past just hitting an exposed port.&lt;/p&gt;
+
+&lt;p&gt;With a little bit of imagination you can use Docker to test your Nginx config files, your RabbitMQ client, your WordPress plugins. For each test you&amp;rsquo;ll get a fresh installation of the thing your testing against, and all a coworker needs to do is download a Docker image.&lt;/p&gt;
+
+&lt;p&gt;So mount your files, use &lt;a href=&#34;https://github.com/bradfitz/http2/blob/f8202bc903bda493ebba4aa54922d78430c2c42f/http2_test.go#L96-L102&#34;&gt;&lt;code&gt;--net=host&lt;/code&gt;&lt;/a&gt;, and who knows, you might even have a little fun writing tests.&lt;/p&gt;
+</description>
+    </item>
+    
+    <item>
+      <title>TLS with Go</title>
+      <link>https://ericchiang.github.io/post/go-tls/</link>
+      <pubDate>Sun, 21 Jun 2015 00:00:00 +0000</pubDate>
+      
+      <guid>https://ericchiang.github.io/post/go-tls/</guid>
+      <description>
+
+&lt;p&gt;For a long time my knowledge of TLS was Googling &amp;ldquo;how to configure nginx as an HTTPS proxy.&amp;rdquo; Okay, the cert goes here and the key goes here, that&amp;rsquo;s my job done. But with more and more pushes for things HTTPS and HTTP/2 (which defaults to using TLS), it sometimes helps to understand this a little better.&lt;/p&gt;
+
+&lt;p&gt;Unfortunately a lot of the articles on this topic are either too high level or too specific and, when I need to learn the topic, I ended up just reading the Go documentation.&lt;/p&gt;
+
+&lt;p&gt;This is an article to explain how TLS (and HTTPS) works by creating and using certificates in running servers with Go. If you want, you can follow along by programming the examples in another window.&lt;/p&gt;
+
+&lt;h2 id=&#34;public-and-private-key-encryption&#34;&gt;Public and Private Key Encryption&lt;/h2&gt;
+
+&lt;p&gt;Public and private key cryptography is awesome and a good place to start. If you&amp;rsquo;ve ever used GitHub or had to log into an EC2 instance, you&amp;rsquo;ve seen these things before. A very common use case is to use them to prove your identity. You place your public key where anyone can see it, then use the private one to later confirm you are who you say you are.&lt;/p&gt;
+
+&lt;p&gt;Go has a fairly straight forward &lt;code&gt;crypto/rsa&lt;/code&gt; package in the standard library. First we can just generate a new, random pair.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;// create a public/private keypair
+// NOTE: Use crypto/rand not math/rand
+privKey, err := rsa.GenerateKey(rand.Reader, 2048)
+if err != nil {
+    log.Fatalf(&amp;quot;generating random key: %v&amp;quot;, err)
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Here&amp;rsquo;s how this works. Things encrypt with a public key can only be decrypted by its paired private key. This involves some tricks with some very large prime numbers, but that&amp;rsquo;s for another article.&lt;/p&gt;
+
+&lt;p&gt;Let&amp;rsquo;s actually encrypt something using the public key.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;plainText := []byte(&amp;quot;The bourgeois human is a virus on the hard drive of the working robot!&amp;quot;)
+
+// use the public key to encrypt the message
+cipherText, err := rsa.EncryptPKCS1v15(rand.Reader, &amp;amp;privKey.PublicKey, plainText)
+if err != nil {
+    log.Fatalf(&amp;quot;could not encrypt data: %v&amp;quot;, err)
+}
+fmt.Printf(&amp;quot;%s\n&amp;quot;, strconv.Quote(string(cipherText)))
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;As you can see, it&amp;rsquo;s even an effort to print the junk that&amp;rsquo;s results from this encryption.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;&amp;quot;\x83\xcc\x11\xe9\x1b&amp;lt;\x9a\xab\xa3H\fq\xfb]\xb7\x8a\xd3\xfb3\xad\xfe\x01\x1d\x86d\x1e\xf7\xf0t.\xc8\x03f\xd7J\xd6\u0086\\\xb83\xad\x82\xb0I\xe51:\xe0\x8c\x94\xfe}\xb5\x17\xeb_\x13S\x17\xfah\xbe\xcd=3\a\xee\xd0u\xd0\xf1$\xc2\b\xf0`\xb2x\xbd\x99\xc0\xf8\xbc`\xe7\x8f黭g\xe1\xa1j\x89\x15\xee,\u061d\xff\xfe\xb7\x84\xbf\x8b}t٫\xa0\x10Y)\xaa\xc4M\x18\xac5\xc9ٗD&amp;lt;\xc1&amp;amp;f\xeb\xf9S(\x97s\x01\xc2s\x1cu\a\x82\x1e1q\xe83Č9\x04\x17\x8c\x1b\xba`\x9f,.\xdc|%6\xa5f\xaf\xdb\xd51\xabJ\xf6#\x11+S=px\xcc +87\xe5\x16\x062\xb6\xda\x0e~_&amp;gt;f,S\x80\xb7\xca\x12w\xf1\xaa\x83\xe3\xde j\xc2\xfd\x1e\xe6s\x88|\xf2?{\x80\x8c\xfb\x916\xbf\xb8\xc7\xee\x81U\x9e1\xc1s\x86p\x01\x80]r\xa5\v\xdb|\x84ץ\xce8\xb7\x0f\xf6\xd7\x02E\xc5u&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;To decrypt this cipher text, we simply use the private key.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;// decrypt with the private key
+decryptedText, err := rsa.DecryptPKCS1v15(nil, privKey, cipherText)
+if err != nil {
+	log.Fatalf(&amp;quot;error decrypting cipher text: %v&amp;quot;, err)
+}
+fmt.Printf(&amp;quot;%s\n&amp;quot;, decryptedText)
+// The bourgeois human is a virus on the hard drive of the working robot!
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Cool, but what good is this?&lt;/p&gt;
+
+&lt;p&gt;Let&amp;rsquo;s say I had your public key and, while talking on the Internet, I want to confirm that you are really you. What I could do is think of a random phrase, let&amp;rsquo;s say &lt;code&gt;&amp;quot;Well, that&#39;s no ordinary rabbit.&amp;quot;&lt;/code&gt; and encrypted it with your public key. You would have to have the private key to decrypt it, and if you where able to say that phrase back to me, I could confirm that I was really talking to you.&lt;/p&gt;
+
+&lt;p&gt;The cool part about this is &lt;strong&gt;you can prove you hold a private key without ever showing it to somebody&lt;/strong&gt;.&lt;/p&gt;
+
+&lt;h2 id=&#34;digital-signatures&#34;&gt;Digital Signatures&lt;/h2&gt;
+
+&lt;p&gt;A second trait of public private key-pairs is the ability to create a digital signature for a given message. These signatures can be used to ensure the validity of the document it signs.&lt;/p&gt;
+
+&lt;p&gt;To to this, the document is run through a hashing algorithm (we&amp;rsquo;ll use SHA256), then the &lt;strong&gt;private&lt;/strong&gt; key computes a signature for the hashed results.&lt;/p&gt;
+
+&lt;p&gt;The &lt;strong&gt;public&lt;/strong&gt; key can then confirm, again through math we&amp;rsquo;ll ignore, if its private key combined with a particular hash would have created that signature. Here&amp;rsquo;s what that looks like using &lt;code&gt;crypto/rsa&lt;/code&gt;.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;// compute the hash of our original plain text
+hash := sha256.Sum256(plainText)
+fmt.Printf(&amp;quot;The hash of my message is: %#x\n&amp;quot;, hash)
+// The hash of my message is: 0xe6a8502561b8e2328b856b4dbe6a9448d2bf76f02b7820e5d5d4907ed2e6db80
+
+// generate a signature using the private key
+signature, err := rsa.SignPKCS1v15(rand.Reader, privKey, crypto.SHA256, hash[:])
+if err != nil {
+    log.Fatalf(&amp;quot;error creating signature: %v&amp;quot;, err)
+}
+// let&#39;s not print the signature, it&#39;s big and ugly
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;We can then attempt to verify the result with different combinations of messages and signatures.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;// use a public key to verify the signature for a message was created by the private key
+verify := func(pub *rsa.PublicKey, msg, signature []byte) error {
+    hash := sha256.Sum256(msg)
+    return rsa.VerifyPKCS1v15(pub, crypto.SHA256, hash[:], signature)
+}
+
+fmt.Println(verify(&amp;amp;privKey.PublicKey, plainText, []byte(&amp;quot;a bad signature&amp;quot;)))
+// crypto/rsa: verification error
+fmt.Println(verify(&amp;amp;privKey.PublicKey, []byte(&amp;quot;a different plain text&amp;quot;), signature))
+// crypto/rsa: verification error
+fmt.Println(verify(&amp;amp;privKey.PublicKey, plainText, signature))
+// &amp;lt;nil&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;What this signature is doing is confirming that a document has not been changed since the private key signed it. And because a public key is public and can be posted anywhere, anyone can run this same test.&lt;/p&gt;
+
+&lt;p&gt;This might be very helpful for say, a certificate authority, who wants to be able to distribute documents which can&amp;rsquo;t be altered without everyone detecting.&lt;/p&gt;
+
+&lt;h2 id=&#34;go-and-x509&#34;&gt;Go and x509&lt;/h2&gt;
+
+&lt;p&gt;Go&amp;rsquo;s &lt;code&gt;crypto/x509&lt;/code&gt; package is what I&amp;rsquo;ll be using to actually generate and work with certificates. It&amp;rsquo;s a package with a lot of options and a somewhat intimidating interface. For instance, the ridiculous number of fields on the &lt;a href=&#34;https://golang.org/pkg/crypto/x509/#Certificate&#34; target=&#34;_blank&#34;&gt;&lt;code&gt;Certificate&lt;/code&gt;&lt;/a&gt; struct.&lt;/p&gt;
+
+&lt;p&gt;To create a new certificate, we first have to provide a template for one. Because we&amp;rsquo;ll be doing this a couple times, I&amp;rsquo;ve made a helper function to do some of the busy work.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;// helper function to create a cert template with a serial number and other required fields
+func CertTemplate() (*x509.Certificate, error) {
+    // generate a random serial number (a real cert authority would have some logic behind this)
+    serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
+    serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
+    if err != nil {
+        return nil, errors.New(&amp;quot;failed to generate serial number: &amp;quot; + err.Error())
+    }
+
+    tmpl := x509.Certificate{
+        SerialNumber:          serialNumber,
+        Subject:               pkix.Name{Organization: []string{&amp;quot;Yhat, Inc.&amp;quot;}},
+        SignatureAlgorithm:    x509.SHA256WithRSA,
+        NotBefore:             time.Now(),
+        NotAfter:              time.Now().Add(time.Hour), // valid for an hour
+        BasicConstraintsValid: true,
+    }
+    return &amp;amp;tmpl, nil
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Certificates are public keys with some attached information (like what domains they work for). In order to create a certificate, we need to both specify that information and provide a public key.&lt;/p&gt;
+
+&lt;p&gt;In this next block, we create a key-pair called &lt;code&gt;rootKey&lt;/code&gt; and a certificate template called &lt;code&gt;rootCertTmpl&lt;/code&gt;, then fill out some information about what we want to use it for.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;// generate a new key-pair
+rootKey, err := rsa.GenerateKey(rand.Reader, 2048)
+if err != nil {
+	log.Fatalf(&amp;quot;generating random key: %v&amp;quot;, err)
+}
+
+rootCertTmpl, err := CertTemplate()
+if err != nil {
+	log.Fatalf(&amp;quot;creating cert template: %v&amp;quot;, err)
+}
+// describe what the certificate will be used for
+rootCertTmpl.IsCA = true
+rootCertTmpl.KeyUsage = x509.KeyUsageCertSign | x509.KeyUsageDigitalSignature
+rootCertTmpl.ExtKeyUsage = []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth}
+rootCertTmpl.IPAddresses = []net.IP{net.ParseIP(&amp;quot;127.0.0.1&amp;quot;)}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Now the fun part.&lt;/p&gt;
+
+&lt;h2 id=&#34;making-a-self-signed-certificate&#34;&gt;Making a Self-Signed Certificate&lt;/h2&gt;
+
+&lt;p&gt;Okay, it&amp;rsquo;s time to actually create a certificate.&lt;/p&gt;
+
+&lt;p&gt;Certificates must be signed by the private key of a parent certificate. Of course, there always has to be a certificate without a parent, and in these cases the certificate&amp;rsquo;s private key must be used in lieu of a parent&amp;rsquo;s.&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;x509.CreateCertificate&lt;/code&gt; takes 4 arguments (plus a source of randomness). The template of the certificate we want to create, the public key we want to wrap, the parent certificate, and the parent&amp;rsquo;s private key.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;func CreateCert(template, parent *x509.Certificate, pub interface{}, parentPriv interface{}) (
+    cert *x509.Certificate, certPEM []byte, err error) {
+
+    certDER, err := x509.CreateCertificate(rand.Reader, template, parent, pub, parentPriv)
+    if err != nil {
+        return
+    }
+    // parse the resulting certificate so we can use it again
+    cert, err = x509.ParseCertificate(certDER)
+    if err != nil {
+        return
+    }
+    // PEM encode the certificate (this is a standard TLS encoding)
+    b := pem.Block{Type: &amp;quot;CERTIFICATE&amp;quot;, Bytes: certDER}
+    certPEM = pem.EncodeToMemory(&amp;amp;b)
+    return
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;To create our self-signed cert (named &lt;code&gt;rootCert&lt;/code&gt;), we provide the arguments listed above. But instead of using a parent certificate, the root key&amp;rsquo;s information is used instead.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;rootCert, rootCertPEM, err := CreateCert(rootCertTmpl, rootCertTmpl, &amp;amp;rootKey.PublicKey, rootKey)
+if err != nil {
+	log.Fatalf(&amp;quot;error creating cert: %v&amp;quot;, err)
+}
+fmt.Printf(&amp;quot;%s\n&amp;quot;, rootCertPEM)
+fmt.Printf(&amp;quot;%#x\n&amp;quot;, rootCert.Signature) // more ugly binary
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;While printing out the signature isn&amp;rsquo;t incredibly useful, &lt;code&gt;rootCertPEM&lt;/code&gt; should look very familiar for anyone who&amp;rsquo;s configured HTTPS or SSH&amp;rsquo;d into a server. Here&amp;rsquo;s what my code generated.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-nohighlight&#34;&gt;-----BEGIN CERTIFICATE-----
+MIIC+jCCAeSgAwIBAgIRAK2uh2q3B+iVYia2l87Tch8wCwYJKoZIhvcNAQELMBUx
+EzARBgNVBAoTClloYXQsIEluYy4wHhcNMTUwNjIwMjI1MDEyWhcNMTUwNjIwMjM1
+MDEyWjAVMRMwEQYDVQQKEwpZaGF0LCBJbmMuMIIBIjANBgkqhkiG9w0BAQEFAAOC
+AQ8AMIIBCgKCAQEAr3Y+KLFritC5CAsTCvYlZj/jczJrGmBNaLHtIUDSOQlrwEXy
+DJqyl5kY8osu0YyZOFVsSbs/xNk5Hm9TmU/NSIxhGxJXkgd2QgeAzUP/zWWvvDiW
+DL3KBu1FVbKnEdFd+7b3FHguHHh8/iHaeB09QgrX0cuf7ePC4PGKeIa9C8yQ8MNO
+q6foQJ9H3p83oSUyl53obMP199Dseu8wVoTekzhesm/N6D2Rhb745T+RcQ8AguXd
+xIob0x0D/orPprcvGDaabqiZnIS5zXVtdbgzKdpBc5Gwnb9b8cFICriOapVFWSLO
+3Ta5uUDuUIDuwg/4Q66bJZqnNHlLoC/h1zvS6QIDAQABo0kwRzAOBgNVHQ8BAf8E
+BAMCAIQwEwYDVR0lBAwwCgYIKwYBBQUHAwEwDwYDVR0TAQH/BAUwAwEB/zAPBgNV
+HREECDAGhwR/AAABMAsGCSqGSIb3DQEBCwOCAQEAJgNp51KA3v774tx8gFP4OMrL
+wfpFZVhIOid35ol0dX0/oOXSUXs28AMIhpou/vWH5REkFadPxtZD1ErHzgB/h7Ce
+Iln9L9ZIC/QMA93chNsDaj+M+Np9p4AckrO9BthqhWjqIbdwkRC4cb4gN1vei1MP
+Pu1nhdvE3PKX4VG5pqc1DaMyKDotc1pc5jaOkz3NAGyTPn9PUyfQP88FqnYaf5/a
+K5Vulo8NmzMOCcBjAJ9B0IXOLg9ba+dyiOK8pIayBiX28FRaxRUiU31iEPI8gbTN
+/6W3f//C3eTDCCLwEmGOmOalpBnaF4wsA6CTxDmwDyTmj9+TRkaEEylEQTlXZA==
+-----END CERTIFICATE-----
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Right away we can use this PEM encoded block in a server. However, let&amp;rsquo;s remember that a certificate is just a public key. To prove ownership of a certificate you must have the private key as well. In the case of our server, we have to load &lt;code&gt;rootKey&lt;/code&gt; if we want to use &lt;code&gt;rootCert&lt;/code&gt;.&lt;/p&gt;
+
+&lt;p&gt;To keep this code cleaner, I&amp;rsquo;m going to use the &lt;a href=&#34;https://golang.org/pkg/net/http/httptest/&#34; target=&#34;_blank&#34;&gt;&lt;code&gt;httptest&lt;/code&gt;&lt;/a&gt; package, which will allow us to spin up and shut down servers on a whim.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;// PEM encode the private key
+rootKeyPEM := pem.EncodeToMemory(&amp;amp;pem.Block{
+	Type: &amp;quot;RSA PRIVATE KEY&amp;quot;, Bytes: x509.MarshalPKCS1PrivateKey(rootKey),
+})
+
+// Create a TLS cert using the private key and certificate
+rootTLSCert, err := tls.X509KeyPair(rootCertPEM, rootKeyPEM)
+if err != nil {
+	log.Fatalf(&amp;quot;invalid key pair: %v&amp;quot;, err)
+}
+
+ok := func(w http.ResponseWriter, r *http.Request) { w.Write([]byte(&amp;quot;HI!&amp;quot;)) }
+s := httptest.NewUnstartedServer(http.HandlerFunc(ok))
+
+// Configure the server to present the certficate we created
+s.TLS = &amp;amp;tls.Config{
+	Certificates: []tls.Certificate{rootTLSCert},
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;We can now make a HTTP request to the server, where we get a very familiar error message.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;// make a HTTPS request to the server
+s.StartTLS()
+_, err = http.Get(s.URL)
+s.Close()
+
+fmt.Println(err)
+// http: TLS handshake error from 127.0.0.1:52944: remote error: bad certificate
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;The &lt;code&gt;net/http&lt;/code&gt; package has rejected the certificate.&lt;/p&gt;
+
+&lt;p&gt;By default, &lt;code&gt;net/http&lt;/code&gt; loads trusted certificates (public keys) from your computer. These are the same ones your browser uses when you surf the web. The issue is, the certificate we create, which the test server provided, has a digital signature. But, none of the public keys trusted by your browser validated that signature.&lt;/p&gt;
+
+&lt;h2 id=&#34;getting-the-client-to-trust-the-server&#34;&gt;Getting the Client to Trust the Server&lt;/h2&gt;
+
+&lt;p&gt;Rather than using a self-signed certificate, let&amp;rsquo;s create a setup that mimics a real situation where a certificate authority provides a organization with a cert for their website. To do this, we&amp;rsquo;ll pretend the &lt;code&gt;rootCert&lt;/code&gt; we created before belongs to the certificate authority, and we&amp;rsquo;ll be attempting to create another certificate for our server.&lt;/p&gt;
+
+&lt;p&gt;First things first, we&amp;rsquo;ll create a new key-pair and template.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;// create a key-pair for the server
+servKey, err := rsa.GenerateKey(rand.Reader, 2048)
+if err != nil {
+	log.Fatalf(&amp;quot;generating random key: %v&amp;quot;, err)
+}
+
+// create a template for the server
+servCertTmpl, err := CertTemplate()
+if err != nil {
+	log.Fatalf(&amp;quot;creating cert template: %v&amp;quot;, err)
+}
+servCertTmpl.KeyUsage = x509.KeyUsageDigitalSignature
+servCertTmpl.ExtKeyUsage = []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}
+servCertTmpl.IPAddresses = []net.IP{net.ParseIP(&amp;quot;127.0.0.1&amp;quot;)}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;To create the server certificate, we&amp;rsquo;re going to use a real parent this time. And again, we provide a public key for the certificate, and the parents private key (&lt;code&gt;rootKey&lt;/code&gt;) to do the signing.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;// create a certificate which wraps the server&#39;s public key, sign it with the root private key
+_, servCertPEM, err := CreateCert(servCertTmpl, rootCert, &amp;amp;servKey.PublicKey, rootKey)
+if err != nil {
+	log.Fatalf(&amp;quot;error creating cert: %v&amp;quot;, err)
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;We now have a PEM encoded certificate. To use this in a server, we have to have the private key to prove we own it.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;// provide the private key and the cert
+servKeyPEM := pem.EncodeToMemory(&amp;amp;pem.Block{
+	Type: &amp;quot;RSA PRIVATE KEY&amp;quot;, Bytes: x509.MarshalPKCS1PrivateKey(servKey),
+})
+servTLSCert, err := tls.X509KeyPair(servCertPEM, servKeyPEM)
+if err != nil {
+	log.Fatalf(&amp;quot;invalid key pair: %v&amp;quot;, err)
+}
+// create another test server and use the certificate
+s = httptest.NewUnstartedServer(http.HandlerFunc(ok))
+s.TLS = &amp;amp;tls.Config{
+	Certificates: []tls.Certificate{servTLSCert},
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;If we made another request here, we&amp;rsquo;d still be in the same situation as before when our client reject the certificate.&lt;/p&gt;
+
+&lt;p&gt;To avoid this, we need to create a client which &amp;ldquo;trusts&amp;rdquo; &lt;code&gt;servCert&lt;/code&gt;. Specifically, we have to trust a public key which validates &lt;code&gt;servCert&lt;/code&gt;&amp;rsquo;s signature. Since we use the &lt;code&gt;root&lt;/code&gt; key-pair to sign the certificate, if we trust &lt;code&gt;rootCert&lt;/code&gt; (the public key), we&amp;rsquo;ll trust the server&amp;rsquo;s certificate.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;// create a pool of trusted certs
+certPool := x509.NewCertPool()
+certPool.AppendCertsFromPEM(rootCertPEM)
+
+// configure a client to use trust those certificates
+client := &amp;amp;http.Client{
+	Transport: &amp;amp;http.Transport{
+		TLSClientConfig: &amp;amp;tls.Config{RootCAs: certPool},
+	},
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;When the server provides a certificate, the client will now validate the signature using all the certificates in &lt;code&gt;certPool&lt;/code&gt; rather than the ones on my laptop. Let&amp;rsquo;s see if this worked.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;s.StartTLS()
+resp, err := client.Get(s.URL)
+s.Close()
+if err != nil {
+	log.Fatalf(&amp;quot;could not make GET request: %v&amp;quot;, err)
+}
+dump, err := httputil.DumpResponse(resp, true)
+if err != nil {
+	log.Fatalf(&amp;quot;could not dump response: %v&amp;quot;, err)
+}
+fmt.Printf(&amp;quot;%s\n&amp;quot;, dump)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;And boom, we&amp;rsquo;re speaking HTTPS.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-nohighlight&#34;&gt;HTTP/1.1 200 OK
+Content-Length: 3
+Content-Type: text/plain; charset=utf-8
+Date: Sat, 20 Jun 2015 22:50:14 GMT
+
+HI!
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;conclusion&#34;&gt;Conclusion&lt;/h2&gt;
+
+&lt;p&gt;Oddly enough, TLS is often more about managing certificates and private keys than worrying about how the actual over the wire encryption works. It&amp;rsquo;s also important to make sure that your servers and clients work with things like HTTPS. And it&amp;rsquo;s a bit of a hack to just turn verification off.&lt;/p&gt;
+
+&lt;p&gt;But as you learn more about TLS, you can find that it&amp;rsquo;s really powerful. Even if you aren&amp;rsquo;t serving HTTP traffic, being able to doing able to do this kind of verification and encryption is a lot easier than trying to set something else up yourself. And the next time a website dumps a bunch of &lt;code&gt;.crt&lt;/code&gt; files on you, you&amp;rsquo;ll hopefully be able to understand exactly what to do with them.&lt;/p&gt;
+
+&lt;h2 id=&#34;bonus-getting-the-server-to-trust-the-client&#34;&gt;Bonus: Getting the Server to Trust the Client&lt;/h2&gt;
+
+&lt;p&gt;Most web servers don&amp;rsquo;t care who the client is who&amp;rsquo;s accessing them. Or at least the client authentication they do do isn&amp;rsquo;t at the TCP layer, it&amp;rsquo;s done with session tokens and HTTP middleware.&lt;/p&gt;
+
+&lt;p&gt;While websites don&amp;rsquo;t find this kind of auth particularly useful, databases and other architecture like a compute clusters, when a server wants to verify it&amp;rsquo;s client without a password, can use this to both restrict access and encrypt communications. For instance, the is what &lt;code&gt;boot2docker&lt;/code&gt; does in its more recent releases, while Google&amp;rsquo;s &lt;a href=&#34;https://github.com/GoogleCloudPlatform/kubernetes/issues/3168#issuecomment-104503217&#34; target=&#34;_blank&#34;&gt;Kubernetes platform&lt;/a&gt; has plans to use this for secure master to worker communication.&lt;/p&gt;
+
+&lt;p&gt;It&amp;rsquo;s easy to turn on client authentication for a Go server.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;// create a new server which requires client authentication
+s = httptest.NewUnstartedServer(http.HandlerFunc(ok))
+s.TLS = &amp;amp;tls.Config{
+	Certificates: []tls.Certificate{servTLSCert},
+	ClientAuth:   tls.RequireAndVerifyClientCert,
+}
+
+s.StartTLS()
+_, err = client.Get(s.URL)
+s.Close()
+fmt.Println(err)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;After the request is made, we&amp;rsquo;ll actually see the server log something like this. It&amp;rsquo;s rejected the client.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-nohighlight&#34;&gt;http: TLS handshake error from 127.0.0.1:47038: tls: client didn&#39;t provide a certificate
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;In order for the client to provide a certificate, we have to create a template first.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;// create a key-pair for the client
+clientKey, err := rsa.GenerateKey(rand.Reader, 2048)
+if err != nil {
+	log.Fatalf(&amp;quot;generating random key: %v&amp;quot;, err)
+}
+
+// create a template for the client
+clientCertTmpl, err := CertTemplate()
+if err != nil {
+	log.Fatalf(&amp;quot;creating cert template: %v&amp;quot;, err)
+}
+clientCertTmpl.KeyUsage = x509.KeyUsageDigitalSignature
+clientCertTmpl.ExtKeyUsage = []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;When creating a new certificate we&amp;rsquo;ll again have the &lt;code&gt;rootCert&lt;/code&gt; sign it. It doesn&amp;rsquo;t have to be the same parent as the server, but this makes the example easier.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;// the root cert signs the cert by again providing its private key
+_, clientCertPEM, err := CreateCert(clientCertTmpl, rootCert, &amp;amp;clientKey.PublicKey, rootKey)
+if err != nil {
+	log.Fatalf(&amp;quot;error creating cert: %v&amp;quot;, err)
+}
+
+// encode and load the cert and private key for the client
+clientKeyPEM := pem.EncodeToMemory(&amp;amp;pem.Block{
+	Type: &amp;quot;RSA PRIVATE KEY&amp;quot;, Bytes: x509.MarshalPKCS1PrivateKey(clientKey),
+})
+clientTLSCert, err := tls.X509KeyPair(clientCertPEM, clientKeyPEM)
+if err != nil {
+	log.Fatalf(&amp;quot;invalid key pair: %v&amp;quot;, err)
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;The client now needs to trust the server&amp;rsquo;s cert by trusting the cert pool we made earlier. As a reminder this holds the &lt;code&gt;rootCert&lt;/code&gt;. It&amp;rsquo;s also needs to present its own certificate.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;authedClient := &amp;amp;http.Client{
+	Transport: &amp;amp;http.Transport{
+		TLSClientConfig: &amp;amp;tls.Config{
+			RootCAs:      certPool,
+			Certificates: []tls.Certificate{clientTLSCert},
+		},
+	},
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Of course, the server still can&amp;rsquo;t verify the client. If we made a request now, we&amp;rsquo;d see something like this.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-nohighlight&#34;&gt;http: TLS handshake error from 127.0.0.1:59756: tls: failed to verify client&#39;s certificate: x509: certificate signed by unknown authority
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;To get around this, we have to configure a new test server to both present the server certificate, and trust the client&amp;rsquo;s (by trusting &lt;code&gt;certPool&lt;/code&gt; which holds &lt;code&gt;rootCert&lt;/code&gt;).&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;s = httptest.NewUnstartedServer(http.HandlerFunc(ok))
+s.TLS = &amp;amp;tls.Config{
+	Certificates: []tls.Certificate{servTLSCert},
+	ClientAuth:   tls.RequireAndVerifyClientCert,
+	ClientCAs:    certPool,
+}
+s.StartTLS()
+_, err = authedClient.Get(s.URL)
+s.Close()
+fmt.Println(err)
+// &amp;lt;nil&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;And there you go, we&amp;rsquo;ve negotiated a secure conversation between a client and a server who both trust that each is properly authenticated.&lt;/p&gt;
+</description>
+    </item>
+    
+  </channel>
+</rss>

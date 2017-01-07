@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="en">
+
+  <head>
+  <meta charset="utf-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+
+  <title>Containers from Scratch</title>
+
+  <meta name="author" content="Eric Chiang" />
+  
+  
+
+  <meta name="generator" content="Hugo 0.18-DEV" />
+
+  <link rel="alternate" href="https://ericchiang.github.io/index.xml" type="application/rss+xml" title="posts">
+
+  <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.5.0/css/font-awesome.min.css" />
+  <link rel="stylesheet" href="https://ericchiang.github.io/css/bootstrap.min.css" />
+  <link rel="stylesheet" href="https://ericchiang.github.io/css/main.css" />
+  <link rel="stylesheet" href="//fonts.googleapis.com/css?family=Lora:400,700,400italic,700italic" />
+  <link rel="stylesheet" href="//fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,800italic,400,300,600,700,800" />
+  <link rel="stylesheet" href="https://ericchiang.github.io/css/pygment_highlights.css" />
+  
+  
+  <meta property="og:title" content="Containers from Scratch" />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="/post/containers-from-scratch//" />
+  <meta property="og:image" content="" />
+  
+</head>
+
+
+  <body>
+
+    <nav class="navbar navbar-default navbar-fixed-top navbar-custom">
+  <div class="container-fluid">
+    <div class="navbar-header">
+      <button type="button" class="navbar-toggle" data-toggle="collapse" data-target="#main-navbar">
+        <span class="sr-only">Toggle navigation</span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+      </button>
+      <a class="navbar-brand" href="https://ericchiang.github.io/">posts</a>
+      <a class="navbar-brand" href="https://ericchiang.github.io//about/">about</a>
+    </div>
+
+    <div class="collapse navbar-collapse" id="main-navbar">
+      <ul class="nav navbar-nav navbar-right">
+      
+      </ul>
+    </div>
+
+	<div class="avatar-container">
+	  <div class="avatar-img-border">
+      
+	  </div>
+	</div>
+
+  </div>
+</nav>
+
+
+    <div role="main" class="container main-content">
+
+      
+        
+
+
+
+
+
+<header class="header-section ">
+
+<div class="intro-header no-img">
+  <div class="container">
+    <div class="row">
+      <div class="col-lg-8 col-lg-offset-2 col-md-10 col-md-offset-1">
+        <div class="post-heading">
+          <h1>Containers from Scratch</h1>
+      
+      
+      
+      <span class="post-meta">Posted on January 7, 2017</span>
+      
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</header>
+
+
+
+
+<div class="container">
+  <div class="row">
+    <div class="col-lg-8 col-lg-offset-2 col-md-10 col-md-offset-1">
+      <article role="main" class="blog-post">
+          
+
+<p>This is write up for talk I gave at <a href="http://catbarcamp.org/">CAT BarCamp</a>, an awesome unconference at Portland State University. The talk started with the self-imposed challenge <em>&ldquo;give an intro to containers without Docker or rkt.&rdquo;</em></p>
+
+<p>Often thought of as cheap VMs, containers are just isolated groups of processes running on a single host. That isolation leverages several underlying technologies built into the Linux kernel: namespaces, cgroups, chroots and lots of terms you&rsquo;ve probably heard before.</p>
+
+<p>So, let&rsquo;s have a little fun and use those underlying technologies to build our own containers.</p>
+
+<p>On today&rsquo;s agenda:</p>
+
+<ul>
+<li><a href="#container-file-system">setting up a file system</a></li>
+<li><a href="#chroot">chroot</a></li>
+<li><a href="#creating-namespaces-with-unshare">unshare</a></li>
+<li><a href="#entering-namespaces-with-nsenter">nsenter</a></li>
+<li><a href="#getting-around-chroot-with-mounts">bind mounts</a></li>
+<li><a href="#cgroups">cgroups</a></li>
+<li><a href="#container-security-and-capabilities">capabilities</a></li>
+</ul>
+
+<h2 id="container-file-systems">Container file systems</h2>
+
+<p>Container images, the thing you download from the internet, are literally just tarballs (or tarballs in tarballs if you&rsquo;re fancy). The least magic part of a container are the files you interact with.</p>
+
+<p>For this post I&rsquo;ve build a simple tarball by stripping down a Docker image. The tarball holds something that looks like a Debian file system and will be our playground for isolating processes.</p>
+
+<pre><code>$ wget https://github.com/ericchiang/containers-from-scratch/releases/download/v0.1.0/rootfs.tar.gz
+$ sha256sum rootfs.tar.gz 
+c79bfb46b9cf842055761a49161831aee8f4e667ad9e84ab57ab324a49bc828c  rootfs.tar.gz
+</code></pre>
+
+<p>First, explode the tarball and poke around.</p>
+
+<pre><code>$ # tar needs sudo to create /dev files and setup file ownership
+$ sudo tar -zxf rootfs.tar.gz
+$ ls rootfs
+bin   dev  home  lib64  mnt  proc  run   srv  tmp  var
+boot  etc  lib   media  opt  root  sbin  sys  usr
+$ ls -al rootfs/bin/ls
+-rwxr-xr-x. 1 root root 118280 Mar 14  2015 rootfs/bin/ls
+</code></pre>
+
+<p>The resulting directory looks an awful lot like a Linux system. There&rsquo;s a <code>bin</code> directory with executables, an <code>etc</code> with system configuration, a <code>lib</code> with shared libraries, and so on.</p>
+
+<p>Actually building this tarball is an interesting topic, but one we&rsquo;ll be glossing over here. For an overview, I&rsquo;d strongly recommend the excellent talk <a href="https://www.youtube.com/watch?v=gMpldbcMHuI"><em>&ldquo;Minimal Containers&rdquo;</em></a> by my coworker Brian Redbeard.</p>
+
+<h2 id="chroot">chroot</h2>
+
+<p>The first tool we&rsquo;ll be working with is <code>chroot</code>. A thin wrapper around the similarly named syscall, it allows us to restrict a process&rsquo; view of the file system. In this case, we&rsquo;ll restrict our process to the &ldquo;rootfs&rdquo; directory then exec a shell.</p>
+
+<p>Once we&rsquo;re in there we can poke around, run commands, and do typical shell things.</p>
+
+<pre><code>$ sudo chroot rootfs /bin/bash
+root@localhost:/# ls /
+bin   dev  home  lib64  mnt  proc  run   srv  tmp  var
+boot  etc  lib   media  opt  root  sbin  sys  usr
+root@localhost:/# which python
+/usr/bin/python
+root@localhost:/# /usr/bin/python -c 'print &quot;Hello, container world!&quot;'
+Hello, container world!
+root@localhost:/# 
+</code></pre>
+
+<p>It&rsquo;s worth noting that this works because of all the things baked into the tarball. When we execute the Python interpreter, we&rsquo;re executing <code>rootfs/usr/bin/python</code>, not the host&rsquo;s Python. That interpreter depends on shared libraries and device files that have been intentionally included in the archive.</p>
+
+<p>Speaking of applications, instead of shell we can run one in our chroot.</p>
+
+<pre><code>$ sudo chroot rootfs python -m SimpleHTTPServer
+Serving HTTP on 0.0.0.0 port 8000 ...
+</code></pre>
+
+<p>If you&rsquo;re following along at home, you&rsquo;ll be able to view everything the file server can see at <a href="http://localhost:8000/">http://localhost:8000/</a>.</p>
+
+<h2 id="creating-namespaces-with-unshare">Creating namespaces with unshare</h2>
+
+<p>How isolated is this chrooted process? Let&rsquo;s run a command on the host in another terminal.</p>
+
+<pre><code>$ # outside of the chroot
+$ top
+</code></pre>
+
+<p>Sure enough, we can see the <code>top</code> invocation from inside the chroot.</p>
+
+<pre><code>$ sudo chroot rootfs /bin/bash
+root@localhost:/# mount -t proc proc /proc
+root@localhost:/# ps aux | grep top
+1000     24753  0.1  0.0 156636  4404 ?        S+   22:28   0:00 top
+root     24764  0.0  0.0  11132   948 ?        S+   22:29   0:00 grep top
+</code></pre>
+
+<p>Better yet, our chrooted shell is running as root, so it has no problem killing the <code>top</code> process.</p>
+
+<pre><code>root@localhost:/# pkill top
+</code></pre>
+
+<p>So much for containment.</p>
+
+<p>This is where we get to talk about namespaces. Namespaces allow us to create restricted views of systems like the process tree, network interfaces, and mounts.</p>
+
+<p>Creating namespace is super easy, just a single syscall with one argument, <a href="https://linux.die.net/man/2/unshare"><code>unshare</code></a>. The <code>unshare</code> command line tool gives us a nice wrapper around this syscall and lets us setup namespaces manually. In this case, we&rsquo;ll create a PID namespace for the shell, then execute the chroot like the last example.</p>
+
+<pre><code>$ sudo unshare -p -f --mount-proc=$PWD/rootfs/proc \
+    chroot rootfs /bin/bash
+root@localhost:/# ps aux
+USER       PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND
+root         1  0.0  0.0  20268  3240 ?        S    22:34   0:00 /bin/bash
+root         2  0.0  0.0  17504  2096 ?        R+   22:34   0:00 ps aux
+root@localhost:/#
+</code></pre>
+
+<p>Having created a new process namespace, poking around our chroot we&rsquo;ll notice something a bit funny. Our shell thinks its PID is 1?! What&rsquo;s more, we can&rsquo;t see the host&rsquo;s process tree anymore.</p>
+
+<h2 id="entering-namespaces-with-nsenter">Entering namespaces with nsenter</h2>
+
+<p>A powerful aspect of namespaces is their composability; processes may choose to separate some namespaces but share others. For instance it may be useful for two programs to have isolated PID namespaces, but share a network namespace (e.g. <a href="http://kubernetes.io/docs/user-guide/pods/">Kubernetes pods</a>). This brings us to the <a href="https://linux.die.net/man/2/setns"><code>setns</code></a> syscall and the <code>nsenter</code>command line tool.</p>
+
+<p>Let&rsquo;s find the shell running in a chroot from our last example.</p>
+
+<pre><code>$ # From the host, not the chroot.
+$ ps aux | grep /bin/bash | grep root
+...
+root     29840  0.0  0.0  20272  3064 pts/5    S+   17:25   0:00 /bin/bash
+</code></pre>
+
+<p>The kernel exposes namespaces under <code>/proc/(PID)/ns</code> as files. In this case, <code>/proc/29840/ns/pid</code> is the process namespace we&rsquo;re hoping to join.</p>
+
+<pre><code>$ sudo ls -l /proc/29840/ns
+total 0
+lrwxrwxrwx. 1 root root 0 Oct 15 17:31 ipc -&gt; 'ipc:[4026531839]'
+lrwxrwxrwx. 1 root root 0 Oct 15 17:31 mnt -&gt; 'mnt:[4026532434]'
+lrwxrwxrwx. 1 root root 0 Oct 15 17:31 net -&gt; 'net:[4026531969]'
+lrwxrwxrwx. 1 root root 0 Oct 15 17:31 pid -&gt; 'pid:[4026532446]'
+lrwxrwxrwx. 1 root root 0 Oct 15 17:31 user -&gt; 'user:[4026531837]'
+lrwxrwxrwx. 1 root root 0 Oct 15 17:31 uts -&gt; 'uts:[4026531838]'
+</code></pre>
+
+<p>The <code>nsenter</code> command provides a wrapper around <code>setns</code> to enter a namespace. We&rsquo;ll provide the namespace file, then run the <code>unshare</code> to remount <code>/proc</code> and <code>chroot</code> to setup a chroot. This time, instead of creating a new namespace, our shell will join the existing one.</p>
+
+<pre><code>$ sudo nsenter --pid=/proc/29840/ns/pid \
+    unshare -f --mount-proc=$PWD/rootfs/proc \
+    chroot rootfs /bin/bash
+root@localhost:/# ps aux
+USER       PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND
+root         1  0.0  0.0  20272  3064 ?        S+   00:25   0:00 /bin/bash
+root         5  0.0  0.0  20276  3248 ?        S    00:29   0:00 /bin/bash
+root         6  0.0  0.0  17504  1984 ?        R+   00:30   0:00 ps aux
+</code></pre>
+
+<p>Having entered the namespace successfully, when we run <code>ps</code> in the second shell (PID 5) we see the first shell (PID 1).</p>
+
+<h2 id="getting-around-chroot-with-mounts">Getting around chroot with mounts</h2>
+
+<p>When deploying an &ldquo;immutable&rdquo; container it often becomes important to inject files or directories into the chroot, either for storage or configuration. For this example, we&rsquo;ll create some files on the host, then expose them read-only to the chrooted shell using <code>mount</code>.</p>
+
+<p>First, let&rsquo;s make a new directory to mount into the chroot and create a file there.</p>
+
+<pre><code>$ sudo mkdir readonlyfiles
+$ echo &quot;hello&quot; &gt; readonlyfiles/hi.txt
+</code></pre>
+
+<p>Next, we&rsquo;ll create a target directory in our container and bind mount the directory providing the <code>-o ro</code> argument to make it read-only. If you&rsquo;ve never seen a bind mount before, think of this like a symlink on steroids.</p>
+
+<pre><code>$ sudo mkdir -p rootfs/var/readonlyfiles
+$ sudo mount --bind -o ro $PWD/readonlyfiles $PWD/rootfs/var/readonlyfiles
+</code></pre>
+
+<p>The chrooted process can now see the mounted files.</p>
+
+<pre><code>$ sudo chroot rootfs /bin/bash
+root@localhost:/# cat /var/readonlyfiles/hi.txt
+hello
+</code></pre>
+
+<p>However, it can&rsquo;t write them.</p>
+
+<pre><code>root@localhost:/# echo &quot;bye&quot; &gt; /var/readonlyfiles/hi.txt
+bash: /var/readonlyfiles/hi.txt: Read-only file system
+</code></pre>
+
+<p>Though a pretty basic example, it can actually be expanded quickly for things like NFS, or in-memory file systems by switching the arguments to <code>mount</code>.</p>
+
+<p>Use <code>umount</code> to remove the bind mount (<code>rm</code> won&rsquo;t work).</p>
+
+<pre><code>$ sudo umount $PWD/rootfs/var/readonlyfiles
+</code></pre>
+
+<h2 id="cgroups">cgroups</h2>
+
+<p>cgroups, short for control groups, allow kernel imposed isolation on resources like memory and CPU. After all, what&rsquo;s the point of isolating processes they can still kill neighbors by hogging RAM?</p>
+
+<p>The kernel exposes cgroups through the <code>/sys/fs/cgroup</code> directory. If your machine doesn&rsquo;t have one you may have to <a href="https://access.redhat.com/documentation/en-US/Red_Hat_Enterprise_Linux/6/html/Resource_Management_Guide/sec-memory.html#memory_example-usage">mount the memory cgroup</a> to follow along.</p>
+
+<pre><code>$ ls /sys/fs/cgroup/
+blkio  cpuacct      cpuset   freezer  memory   net_cls,net_prio  perf_event  systemd
+cpu    cpu,cpuacct  devices  hugetlb  net_cls  net_prio          pids
+</code></pre>
+
+<p>For this example we&rsquo;ll create a cgroup to restrict the memory of a process. Creating a cgroup is easy, just create a directory. In this case we&rsquo;ll create a memory group called &ldquo;demo&rdquo;. Once created, the kernel fills the directory with files that can be used to configure the cgroup.</p>
+
+<pre><code>$ sudo su
+# mkdir /sys/fs/cgroup/memory/demo
+# ls /sys/fs/cgroup/memory/demo/
+cgroup.clone_children               memory.memsw.failcnt
+cgroup.event_control                memory.memsw.limit_in_bytes
+cgroup.procs                        memory.memsw.max_usage_in_bytes
+memory.failcnt                      memory.memsw.usage_in_bytes
+memory.force_empty                  memory.move_charge_at_immigrate
+memory.kmem.failcnt                 memory.numa_stat
+memory.kmem.limit_in_bytes          memory.oom_control
+memory.kmem.max_usage_in_bytes      memory.pressure_level
+memory.kmem.slabinfo                memory.soft_limit_in_bytes
+memory.kmem.tcp.failcnt             memory.stat
+memory.kmem.tcp.limit_in_bytes      memory.swappiness
+memory.kmem.tcp.max_usage_in_bytes  memory.usage_in_bytes
+memory.kmem.tcp.usage_in_bytes      memory.use_hierarchy
+memory.kmem.usage_in_bytes          notify_on_release
+memory.limit_in_bytes               tasks
+memory.max_usage_in_bytes
+</code></pre>
+
+<p>To adjust a value we just have to write to the corresponding file. Let&rsquo;s limit the cgroup to 100MB of memory and turn off swap.</p>
+
+<pre><code># echo &quot;100000000&quot; &gt; /sys/fs/cgroup/memory/demo/memory.limit_in_bytes
+# echo &quot;0&quot; &gt; /sys/fs/cgroup/memory/demo/memory.swappiness
+</code></pre>
+
+<p>The <code>talks</code> file is special, it contains the list of processes which are assigned to the cgroup. To join the cgroup we can write our own PID.</p>
+
+<pre><code># echo $$ &gt; /sys/fs/cgroup/memory/demo/tasks
+</code></pre>
+
+<p>Finally we need a memory hungry application.</p>
+
+<pre><code class="language-python">f = open(&quot;/dev/urandom&quot;, &quot;r&quot;)
+data = &quot;&quot;
+
+i=0
+while True:
+    data += f.read(10000000) # 10mb
+    i += 1
+    print &quot;%dmb&quot; % (i*10,)
+</code></pre>
+
+<p>If you&rsquo;ve setup the cgroup correctly, this program won&rsquo;t crash your computer.</p>
+
+<pre><code># python hungry.py
+10mb
+20mb
+30mb
+40mb
+50mb
+60mb
+70mb
+80mb
+Killed
+</code></pre>
+
+<p>If that didn&rsquo;t crash your computer, congratulations!</p>
+
+<p>cgroups can&rsquo;t be removed until every processes in the <code>tasks</code> file has exited or been reassigned to another group. Exit the shell and remove the directory with <code>rmdir</code> (don&rsquo;t use <code>rm -r</code>).</p>
+
+<pre><code># exit
+exit
+$ sudo rmdir /sys/fs/cgroup/memory/demo
+</code></pre>
+
+<h2 id="container-security-and-capabilities">Container security and capabilities</h2>
+
+<p>Containers are extremely effective ways of running arbitrary code from the internet as root, and this is where the low overhead of containers hurts us. Containers are significantly easier to break out of than a VM. As a result many technologies used to improve the security of containers, such as SELinux, seccomp, and capabilities involve limiting the power of processes already running as root.</p>
+
+<p>In this section we&rsquo;ll be exploring <a href="https://linux.die.net/man/7/capabilities">Linux capabilities</a>.</p>
+
+<p>Consider the following Go program which attempts to listen on port 80.</p>
+
+<pre><code class="language-go">package main
+
+import (
+    &quot;fmt&quot;
+    &quot;net&quot;
+    &quot;os&quot;
+)
+
+func main() {
+    if _, err := net.Listen(&quot;tcp&quot;, &quot;:80&quot;); err != nil {
+        fmt.Fprintln(os.Stdout, err)
+        os.Exit(2)
+    }
+    fmt.Println(&quot;success&quot;)
+}
+</code></pre>
+
+<p>What happens when we compile and run this?</p>
+
+<pre><code>$ go build -o listen listen.go
+$ ./listen
+listen tcp :80: bind: permission denied
+</code></pre>
+
+<p>Predictably this program fails; listing on port 80 requires permissions we don&rsquo;t have. Of course we can just use <code>sudo</code>, but we&rsquo;d like to give the binary just the one permission to listen on lower ports.</p>
+
+<p>Capabilities are a set of discrete powers that together make up everything root can do. This ranges from things like setting the system clock, to kill arbitrary processes. In this case, <code>CAP_NET_BIND_SERVICE</code> allows executables to listen on lower ports.</p>
+
+<p>We can grant the executable <code>CAP_NET_BIND_SERVICE</code> using the <code>setcap</code> command.</p>
+
+<pre><code>$ sudo setcap cap_net_bind_service=+ep listen
+$ getcap listen
+listen = cap_net_bind_service+ep
+$ ./listen
+success
+</code></pre>
+
+<p>For things already running as root, like most containerized apps, we&rsquo;re more interested in taking capabilities away than granting them. First let&rsquo;s see all powers our root shell has:</p>
+
+<pre><code>$ sudo su
+# capsh --print
+Current: = cap_chown,cap_dac_override,cap_dac_read_search,cap_fowner,cap_fsetid,cap_kill,cap_setgid,cap_setuid,cap_setpcap,cap_linux_immutable,cap_net_bind_service,cap_net_broadcast,cap_net_admin,cap_net_raw,cap_ipc_lock,cap_ipc_owner,cap_sys_module,cap_sys_rawio,cap_sys_chroot,cap_sys_ptrace,cap_sys_pacct,cap_sys_admin,cap_sys_boot,cap_sys_nice,cap_sys_resource,cap_sys_time,cap_sys_tty_config,cap_mknod,cap_lease,cap_audit_write,cap_audit_control,cap_setfcap,cap_mac_override,cap_mac_admin,cap_syslog,cap_wake_alarm,cap_block_suspend,37+ep
+Bounding set =cap_chown,cap_dac_override,cap_dac_read_search,cap_fowner,cap_fsetid,cap_kill,cap_setgid,cap_setuid,cap_setpcap,cap_linux_immutable,cap_net_bind_service,cap_net_broadcast,cap_net_admin,cap_net_raw,cap_ipc_lock,cap_ipc_owner,cap_sys_module,cap_sys_rawio,cap_sys_chroot,cap_sys_ptrace,cap_sys_pacct,cap_sys_admin,cap_sys_boot,cap_sys_nice,cap_sys_resource,cap_sys_time,cap_sys_tty_config,cap_mknod,cap_lease,cap_audit_write,cap_audit_control,cap_setfcap,cap_mac_override,cap_mac_admin,cap_syslog,cap_wake_alarm,cap_block_suspend,37
+Securebits: 00/0x0/1'b0
+ secure-noroot: no (unlocked)
+ secure-no-suid-fixup: no (unlocked)
+ secure-keep-caps: no (unlocked)
+uid=0(root)
+gid=0(root)
+groups=0(root)
+</code></pre>
+
+<p>Yeah, that&rsquo;s a lot of capabilities.</p>
+
+<p>As an example, we&rsquo;ll use <code>capsh</code> to drop a few capabilities including <code>CAP_CHOWN</code>. If things work as expected, our shell shouldn&rsquo;t be able to modify file ownership despite being root.</p>
+
+<pre><code>$ sudo capsh --drop=cap_chown,cap_setpcap,cap_setfcap,cap_sys_admin --chroot=$PWD/rootfs --
+root@localhost:/# whoami
+root
+root@localhost:/# chown nobody /bin/ls
+chown: changing ownership of '/bin/ls': Operation not permitted
+</code></pre>
+
+<p>Conventional wisdom still states that VMs isolation is mandatory when running untrusted code. But security features like capabilities are important to protect against hacked applications running in containers.</p>
+
+<p>Beyond more elaborate tools like seccomp, SELinux, and capabilities, applications running in containers generally benefit from the same kind of best practices as applications running outside of one. Know what your linking against, don&rsquo;t run as root in your container, update for known security issues in a timely fashion.</p>
+
+<h2 id="conclusion">Conclusion</h2>
+
+<p>Containers aren&rsquo;t magic. Anyone with a Linux machine can play around with them and tools like Docker and rkt are just wrappers around things built into every modern kernel. No, you probably shouldn&rsquo;t go and implement your own container runtime. But having a better understanding of these lower level technologies will help you work with these higher level tools (especially when debugging).</p>
+
+<p>There&rsquo;s a ton of topics I wasn&rsquo;t able to cover today, networking and copy-on-write file systems probably being the biggest two. However, I hope this acts as a good starting point for anyone wanting to get their hands dirty. Happy hacking!</p>
+
+      </article>
+
+      <ul class="pager blog-pager">
+        
+        <li class="previous">
+          <a href="https://ericchiang.github.io/post/go-letsencrypt/" data-toggle="tooltip" data-placement="top" title="A Let&#39;s Encrypt Client for Go">&larr; Previous Post</a>
+        </li>
+        
+        
+      </ul>
+
+      
+
+    </div>
+  </div>
+</div>
+
+      
+
+    </div>
+
+    <footer>
+  <div class="container beautiful-jekyll-footer">
+    <div class="row">
+      <div class="col-lg-8 col-lg-offset-2 col-md-10 col-md-offset-1">
+        <ul class="list-inline text-center footer-links">
+          
+          
+          <li>
+            <a href="https://github.com/ericchiang" title="GitHub">
+              <span class="fa-stack fa-lg">
+                <i class="fa fa-circle fa-stack-2x"></i>
+                <i class="fa fa-github fa-stack-1x fa-inverse"></i>
+              </span>
+            </a>
+          </li>
+          
+		      
+          <li>
+            <a href="https://twitter.com/erchiang" title="Twitter">
+              <span class="fa-stack fa-lg">
+                <i class="fa fa-circle fa-stack-2x"></i>
+                <i class="fa fa-twitter fa-stack-1x fa-inverse"></i>
+              </span>
+            </a>
+          </li>
+          
+		      
+		      
+	    	  
+          
+          
+
+    		  <li>
+      			<a href="https://ericchiang.github.io/index.xml" title="RSS">
+      			  <span class="fa-stack fa-lg">
+        				<i class="fa fa-circle fa-stack-2x"></i>
+        				<i class="fa fa-rss fa-stack-1x fa-inverse"></i>
+      			  </span>
+      			</a>
+    		  </li>		
+
+        </ul>
+        <p class="copyright text-muted">
+    		  Eric Chiang
+    		  &nbsp;&bull;&nbsp;
+    		  2017
+    		  
+    		  
+    		  &nbsp;&bull;&nbsp;
+    		  <a href="https://ericchiang.github.io/">posts</a>
+    		  
+  	    </p>
+  	        
+    		<p class="theme-by text-muted">
+    		  Theme by
+    		  <a href="http://deanattali.com/beautiful-jekyll/">beautiful-jekyll</a>
+    		</p>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script src="https://ericchiang.github.io/js/jquery-1.11.2.min.js"></script>
+<script src="https://ericchiang.github.io/js/bootstrap.min.js"></script>
+<script src="https://ericchiang.github.io/js/main.js"></script>
+
+
+<script>
+(function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+(i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+})(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+ga('create', 'UA-64244584-1', 'auto');
+ga('send', 'pageview');
+</script>
+
+
+  </body>
+</html>
