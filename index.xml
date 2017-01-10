@@ -241,7 +241,7 @@ memory.max_usage_in_bytes
 # echo &amp;quot;0&amp;quot; &amp;gt; /sys/fs/cgroup/memory/demo/memory.swappiness
 &lt;/code&gt;&lt;/pre&gt;
 
-&lt;p&gt;The &lt;code&gt;talks&lt;/code&gt; file is special, it contains the list of processes which are assigned to the cgroup. To join the cgroup we can write our own PID.&lt;/p&gt;
+&lt;p&gt;The &lt;code&gt;tasks&lt;/code&gt; file is special, it contains the list of processes which are assigned to the cgroup. To join the cgroup we can write our own PID.&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;# echo $$ &amp;gt; /sys/fs/cgroup/memory/demo/tasks
 &lt;/code&gt;&lt;/pre&gt;
