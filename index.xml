@@ -22,18 +22,6 @@ Often thought of as cheap VMs, containers are just isolated groups of processes 
     </item>
     
     <item>
-      <title>about</title>
-      <link>https://ericchiang.github.io/about/</link>
-      <pubDate>Sat, 15 Oct 2016 15:09:29 -0700</pubDate>
-      
-      <guid>https://ericchiang.github.io/about/</guid>
-      <description>Hi, I&amp;rsquo;m Eric. I&amp;rsquo;m an engineer in San Francisco for CoreOS where I work on authentication and authorization systems, contribute to upstream Kubernetes auth systems, and help build a Kubernetes distribution.
-I previously built container platforms for deploying and managing machine learning APIs at a New York based startup (YC W15).
-Open source:
- dex: An OpenID Connect server which federates to other IdPs (LDAP, SAML, etc.) go-oidc: OpenID Connect support for golang.</description>
-    </item>
-    
-    <item>
       <title>A Let&#39;s Encrypt Client for Go</title>
       <link>https://ericchiang.github.io/post/go-letsencrypt/</link>
       <pubDate>Fri, 13 Nov 2015 00:00:00 +0000</pubDate>
@@ -63,6 +51,18 @@ Dependency hell. Where it&amp;rsquo;s impossible to run a test on your laptop. W
       <guid>https://ericchiang.github.io/post/go-tls/</guid>
       <description>For a long time my knowledge of TLS was Googling &amp;ldquo;how to configure nginx as an HTTPS proxy.&amp;rdquo; Okay, the cert goes here and the key goes here, that&amp;rsquo;s my job done. But with more and more pushes for things HTTPS and HTTP/2 (which defaults to using TLS), it sometimes helps to understand this a little better.
 Unfortunately a lot of the articles on this topic are either too high level or too specific and, when I need to learn the topic, I ended up just reading the Go documentation.</description>
+    </item>
+    
+    <item>
+      <title>about</title>
+      <link>https://ericchiang.github.io/about/</link>
+      <pubDate>Mon, 01 Jan 0001 00:00:00 +0000</pubDate>
+      
+      <guid>https://ericchiang.github.io/about/</guid>
+      <description>Hi, I&amp;rsquo;m Eric. I&amp;rsquo;m an engineer in San Francisco for CoreOS where I work on authentication and authorization systems, contribute to upstream Kubernetes auth systems, and help build a Kubernetes distribution.
+I previously built container platforms for deploying and managing machine learning APIs at a New York based startup (YC W15).
+Open source:
+ dex: An OpenID Connect server which federates to other IdPs (LDAP, SAML, etc.) go-oidc: OpenID Connect support for golang.</description>
     </item>
     
   </channel>
