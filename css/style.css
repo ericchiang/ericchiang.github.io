@@ -30,7 +30,11 @@ pre {
   overflow-x: auto;
 }
 code { background: #f9f9f9; }
-pre code { background: none; }
+pre code {
+  background: none;
+  font-size: 70%;
+  line-height: 0;
+}
 
 /* misc elements */
 img, iframe, video { max-width: 100%; }
