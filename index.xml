@@ -62,9 +62,10 @@ Unfortunately a lot of the articles on this topic are either too high level or t
       <description>Eric Chiang
 github: @ericchiang
 twitter: @erchiang
-Engineer at CoreOS, and Kubernetes maintainer.
+email: eric.chiang.m@gmail.com
+Security engineer.
 Open source:
- dex: An OpenID Connect server which federates to other IdPs (LDAP, SAML, etc.) go-oidc: OpenID Connect support for golang.org/x/oauth2. pup: Like jq, but for HTML. k8s: A slimmed down Kubernetes client that uses protobufs.  Posts on other sites:
+ dex: An OpenID Connect server which federates to other IdPs (LDAP, SAML, etc.) go-oidc: OpenID Connect support for golang.org/x/oauth2. pup: Like jq, but for HTML. k8s: A Kubernetes client with two external dependencies.  Posts on other sites:
  Using RBAC, Generally Available in Kubernetes v1.8 - October 27, 2017  Talks:
  Containers from Scratch - (video, 36 min) - CoreOS Fest - May, 2017 Writing Kubernetes Controllers (using Go!</description>
     </item>
