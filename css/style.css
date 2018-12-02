@@ -1,4 +1,7 @@
 body {
+  margin-left: auto;
+  margin-right: auto;
+  width: 980px;
 }
 
 /* header and footer areas */
