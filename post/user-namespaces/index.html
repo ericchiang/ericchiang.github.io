@@ -42,11 +42,11 @@ if (!doNotTrack) {
 <main>
 
 
-<p>Ian Coldwater recently had a great thread on <a href="https://twitter.com/IanColdwater/status/1097036373465407489">bridging the gap between the security and container worlds</a>. A lot of those answers wont fit in a tweet, so here’s my attempt to explain user namespaces.</p>
+<p>Ian Coldwater recently had a great thread on <a href="https://twitter.com/IanColdwater/status/1097036373465407489">bridging the gap between the security and container worlds</a>. A lot of those answers wont fit in a tweet, so here’s my attempt for a more in-depth answer.</p>
 
 <h2 id="namespaces-for-everyone">Namespaces for everyone</h2>
 
-<p>User namespaces are a way to create unique views of user and group IDs. Unlike <a href="../containers-from-scratch/">other namespaces</a>, they can be created by non-root users and are primarily used by unprivileged processes to act as root.</p>
+<p>User namespaces are a way to create unique views of user and group IDs. Unlike <a href="../containers-from-scratch/">other namespaces</a>, they can be created by non-root users and are primarily used by unprivileged processes to access capabilities normally reserved for root.</p>
 
 <p>The <code>unshare</code> tool can be used to create a user namespace and act as root:</p>
 
@@ -115,13 +115,21 @@ groups=65534(nogroup),65534(nogroup),65534(nogroup),0(root)
 Can't grab 0.0.0.0:80 with bind : Permission denied
 </code></pre>
 
+<p>Or override host file permissions:</p>
+
+<pre><code class="language-shell">$ unshare --map-root-user cat /etc/shadow
+cat: /etc/shadow: Permission denied
+</code></pre>
+
+<p>Ultimately, the process is only root in the namespace and host restrictions still apply as if it was running as a normal user.</p>
+
 <h2 id="use-in-practice">Use in practice</h2>
 
 <p>In practice, user namespaces are largely used for unprivileged management of namespaces.</p>
 
 <p><a href="https://flatpak.org/">Flatpak</a>, a tool for running containerized desktop applications, allows unprivileged users to run containers by leveraging user namespaces to create the application’s sandbox. Flatpak’s runtime <a href="https://github.com/projectatomic/bubblewrap">bubblewrap</a> is also used by projects like GNOME Desktop to isolate risky processes.</p>
 
-<p>Running containers in containers is also enabled by user namespace. Docker and other runtimes heavily restrict containerized process capabilities to prevent escapes, and these restrictions prohibit running <code>docker build</code> inside a container. Project’s like Jess Frazelle’s <a href="https://github.com/genuinetools/img">img</a> get around this by using user namespaces to support <code>Dockerfile</code> <code>RUN</code> commands.</p>
+<p>Running containers in containers also benefits from user namespace. Docker and other runtimes heavily restrict containerized process capabilities to prevent escapes, and these restrictions prohibit running <code>docker build</code> inside a container. Project’s like Jess Frazelle’s <a href="https://github.com/genuinetools/img">img</a> get around this by using user namespaces to support <code>Dockerfile</code> <code>RUN</code> commands.</p>
 
 <h2 id="user-namespace-security">User namespace security</h2>
 
@@ -131,7 +139,7 @@ Can't grab 0.0.0.0:80 with bind : Permission denied
 
 <p>Like many things in containerland, user namespaces don’t make container isolation perfect, and we hope that letting ordinary processes utilize namespace isolation outweighs the costs.</p>
 
-<p>&hellip;and again, why write a kernel exploit when we’re <a href="https://a16z.com/2019/01/18/notes-on-security-in-2019/">so bad at container security</a> in the first place?</p>
+<p>&hellip;and why write a kernel exploit when we’re <a href="https://a16z.com/2019/01/18/notes-on-security-in-2019/">so bad at container security</a> in the first place?</p>
 
 </main>
 
