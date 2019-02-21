@@ -17,7 +17,7 @@
       <pubDate>Wed, 20 Feb 2019 00:00:00 +0000</pubDate>
       
       <guid>https://ericchiang.github.io/post/user-namespaces/</guid>
-      <description>Ian Coldwater recently had a great thread on bridging the gap between the security and container worlds. A lot of those answers wont fit in a tweet, so here’s my attempt for a more in-depth answer.
+      <description>Ian Coldwater recently had a great thread on bridging the gap between the security and container worlds. A lot of those answers wont fit in a tweet, so here’s my attempt for a more in-depth response.
 Namespaces for everyone User namespaces are a way to create unique views of user and group IDs. Unlike other namespaces, they can be created by non-root users and are primarily used by unprivileged processes to access capabilities normally reserved for root.</description>
     </item>
     
