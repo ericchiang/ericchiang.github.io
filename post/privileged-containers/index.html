@@ -108,7 +108,7 @@ loop6               sda3
 loop7               sda4
 </code></pre>
 
-<p>What makes a privileged container truly dangerous are the <a href="http://man7.org/linux/man-pages/man7/capabilities.7.html">Linux capabilities</a> granted to it. Capabilities are the set of powers that compose “root” such as listening on lower ports, killing other processes, or change file ownership. In a regular container, processes are severely restricted:</p>
+<p>What makes a privileged container truly dangerous are the <a href="http://man7.org/linux/man-pages/man7/capabilities.7.html">Linux capabilities</a> granted to it. Capabilities are the set of powers that compose “root” such as listening on lower ports, killing other processes, or changing file ownership. In a regular container, processes are severely restricted:</p>
 
 <pre><code>$ docker run --rm alpine:latest /bin/sh -c 'apk update &amp;&amp; apk add libcap &amp;&amp; capsh --print'
 # ...
