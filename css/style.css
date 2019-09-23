@@ -24,6 +24,10 @@ hr {
   color: #ddd;
 }
 
+p {
+  font-size: large;
+}
+
 /* code */
 pre {
   border: 1px solid #ddd;
