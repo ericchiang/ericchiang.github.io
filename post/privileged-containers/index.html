@@ -44,9 +44,7 @@ if (!doNotTrack) {
 
 <h2 id="disabling-security-features">Disabling security features</h2>
 
-<p>Applications that interact with host systems, such as network plugins or storage drivers, often hit default restrictions when run in a container. For these cases, container runtimes have an out to disable security features for individual containers, letting the application sidestep Kernel controls like SELinux.</p>
-
-<p>In Kubernetes this is achieved with the “privileged” security context field:</p>
+<p>Applications that interact with host systems such as network plugins or storage drivers can have issues when run in a container, requesting access that’s been restricted by the kernel. For these cases, container runtimes have an out to disable these security features and let the process access the host. In Kubernetes this is achieved with the “privileged” security context field:</p>
 
 <pre><code>containers:
   - name: flannel

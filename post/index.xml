@@ -17,8 +17,7 @@
       <pubDate>Mon, 23 Sep 2019 00:00:00 +0000</pubDate>
       
       <guid>https://ericchiang.github.io/post/privileged-containers/</guid>
-      <description>Disabling security features Applications that interact with host systems, such as network plugins or storage drivers, often hit default restrictions when run in a container. For these cases, container runtimes have an out to disable security features for individual containers, letting the application sidestep Kernel controls like SELinux.
-In Kubernetes this is achieved with the “privileged” security context field:
+      <description>Disabling security features Applications that interact with host systems such as network plugins or storage drivers can have issues when run in a container, requesting access that’s been restricted by the kernel. For these cases, container runtimes have an out to disable these security features and let the process access the host. In Kubernetes this is achieved with the “privileged” security context field:
 containers: - name: flannel image: quay.io/coreos/flannel:v0.11.0-amd64 command: - &amp;quot;/opt/bin/flanneld&amp;quot; - &amp;quot;--ip-masq&amp;quot; - &amp;quot;--kube-subnet-mgr&amp;quot; - &amp;quot;--iface=$(POD_IP)&amp;quot; env: - name: POD_IP valueFrom: fieldRef: fieldPath: status.</description>
     </item>
     
