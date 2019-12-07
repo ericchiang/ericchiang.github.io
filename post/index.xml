@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
   <channel>
     <title>Posts on posts</title>
@@ -37,8 +37,8 @@ Namespaces for everyone User namespaces are a way to create unique views of user
       <pubDate>Sat, 07 Jan 2017 00:00:00 +0000</pubDate>
       
       <guid>https://ericchiang.github.io/post/containers-from-scratch/</guid>
-      <description>This is write up for talk I gave at CAT BarCamp, an awesome unconference at Portland State University. The talk started with the self-imposed challenge &amp;ldquo;give an intro to containers without Docker or rkt.&amp;rdquo;
-Often thought of as cheap VMs, containers are just isolated groups of processes running on a single host. That isolation leverages several underlying technologies built into the Linux kernel: namespaces, cgroups, chroots and lots of terms you&amp;rsquo;ve probably heard before.</description>
+      <description>This is write up for talk I gave at CAT BarCamp, an awesome unconference at Portland State University. The talk started with the self-imposed challenge &amp;ldquo;give an intro to containers without Docker or rkt.&amp;quot;
+Often thought of as cheap VMs, containers are just isolated groups of processes running on a single host. That isolation leverages several underlying technologies built into the Linux kernel: namespaces, cgroups, chroots and lots of terms you&#39;ve probably heard before.</description>
     </item>
     
     <item>
@@ -47,9 +47,8 @@ Often thought of as cheap VMs, containers are just isolated groups of processes 
       <pubDate>Fri, 13 Nov 2015 00:00:00 +0000</pubDate>
       
       <guid>https://ericchiang.github.io/post/go-letsencrypt/</guid>
-      <description>Just want to jump into the GitHub project? Click here.
-If you haven&amp;rsquo;t heard, Let&amp;rsquo;s Encrypt is trying to secure the internet with automated and free TLS certificates.
-In preperation for the Public Beta in December, I&amp;rsquo;ve written a simple client in Go which you can go get on GitHub. This post uses that client to take you through the workflow of signing up, completing challenges, and requesting certificates. Let&amp;rsquo;s Encrypt!</description>
+      <description>Just want to jump into the GitHub project? Click here.If you haven&#39;t heard, Let&#39;s Encrypt is trying to secure the internet with automated and free TLS certificates.
+In preperation for the Public Beta in December, I&#39;ve written a simple client in Go which you can go get on GitHub. This post uses that client to take you through the workflow of signing up, completing challenges, and requesting certificates. Let&#39;s Encrypt!</description>
     </item>
     
     <item>
@@ -58,9 +57,9 @@ In preperation for the Public Beta in December, I&amp;rsquo;ve written a simple 
       <pubDate>Mon, 14 Sep 2015 00:00:00 +0000</pubDate>
       
       <guid>https://ericchiang.github.io/post/testing-dbs-with-docker/</guid>
-      <description>Databases, authentication management, metric aggregators; there&amp;rsquo;s a service or API for everything.
-There&amp;rsquo;s also a place called dependency hell.
-Dependency hell. Where it&amp;rsquo;s impossible to run a test on your laptop. Where bugs are found by running a main, clicking around, and seeing what breaks. Where you cross your fingers and pray that new versions don&amp;rsquo;t break everything. Where we use mocks and stubs to combat a growing technology stack.</description>
+      <description>Databases, authentication management, metric aggregators; there&#39;s a service or API for everything.
+There&#39;s also a place called dependency hell.
+Dependency hell. Where it&#39;s impossible to run a test on your laptop. Where bugs are found by running a main, clicking around, and seeing what breaks. Where you cross your fingers and pray that new versions don&#39;t break everything. Where we use mocks and stubs to combat a growing technology stack.</description>
     </item>
     
     <item>
@@ -69,7 +68,7 @@ Dependency hell. Where it&amp;rsquo;s impossible to run a test on your laptop. W
       <pubDate>Sun, 21 Jun 2015 00:00:00 +0000</pubDate>
       
       <guid>https://ericchiang.github.io/post/go-tls/</guid>
-      <description>For a long time my knowledge of TLS was Googling &amp;ldquo;how to configure nginx as an HTTPS proxy.&amp;rdquo; Okay, the cert goes here and the key goes here, that&amp;rsquo;s my job done. But with more and more pushes for things HTTPS and HTTP/2 (which defaults to using TLS), it sometimes helps to understand this a little better.
+      <description>For a long time my knowledge of TLS was Googling &amp;ldquo;how to configure nginx as an HTTPS proxy.&amp;rdquo; Okay, the cert goes here and the key goes here, that&#39;s my job done. But with more and more pushes for things HTTPS and HTTP/2 (which defaults to using TLS), it sometimes helps to understand this a little better.
 Unfortunately a lot of the articles on this topic are either too high level or too specific and, when I need to learn the topic, I ended up just reading the Go documentation.</description>
     </item>
     
