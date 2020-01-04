@@ -185,15 +185,15 @@ memory.max_usage_in_bytes
 </code></pre><p>The <code>tasks</code> file is special, it contains the list of processes which are assigned to the cgroup. To join the cgroup we can write our own PID.</p>
 <pre><code># echo $$ &gt; /sys/fs/cgroup/memory/demo/tasks
 </code></pre><p>Finally we need a memory hungry application.</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-python" data-lang="python">f <span style="color:#f92672">=</span> open(<span style="color:#e6db74"></span><span style="color:#e6db74">&#34;</span><span style="color:#e6db74">/dev/urandom</span><span style="color:#e6db74">&#34;</span>, <span style="color:#e6db74"></span><span style="color:#e6db74">&#34;</span><span style="color:#e6db74">r</span><span style="color:#e6db74">&#34;</span>)
-data <span style="color:#f92672">=</span> <span style="color:#e6db74"></span><span style="color:#e6db74">&#34;</span><span style="color:#e6db74">&#34;</span>
+<pre><code>f = open(&quot;/dev/urandom&quot;, &quot;r&quot;)
+data = &quot;&quot;
 
-i<span style="color:#f92672">=</span><span style="color:#ae81ff">0</span>
-<span style="color:#66d9ef">while</span> True:
-    data <span style="color:#f92672">+</span><span style="color:#f92672">=</span> f<span style="color:#f92672">.</span>read(<span style="color:#ae81ff">10000000</span>) <span style="color:#75715e"># 10mb</span>
-    i <span style="color:#f92672">+</span><span style="color:#f92672">=</span> <span style="color:#ae81ff">1</span>
-    <span style="color:#66d9ef">print</span> <span style="color:#e6db74"></span><span style="color:#e6db74">&#34;</span><span style="color:#e6db74">%d</span><span style="color:#e6db74">mb</span><span style="color:#e6db74">&#34;</span> <span style="color:#f92672">%</span> (i<span style="color:#f92672">*</span><span style="color:#ae81ff">10</span>,)
-</code></pre></div><p>If you've setup the cgroup correctly, this program won't crash your computer.</p>
+i=0
+while True:
+    data += f.read(10000000) # 10mb
+    i += 1
+    print &quot;%dmb&quot; % (i*10,)
+</code></pre><p>If you've setup the cgroup correctly, this program won't crash your computer.</p>
 <pre><code># python hungry.py
 10mb
 20mb
@@ -213,22 +213,22 @@ $ sudo rmdir /sys/fs/cgroup/memory/demo
 <p>Containers are extremely effective ways of running arbitrary code from the internet as root, and this is where the low overhead of containers hurts us. Containers are significantly easier to break out of than a VM. As a result many technologies used to improve the security of containers, such as SELinux, seccomp, and capabilities involve limiting the power of processes already running as root.</p>
 <p>In this section we'll be exploring <a href="https://linux.die.net/man/7/capabilities">Linux capabilities</a>.</p>
 <p>Consider the following Go program which attempts to listen on port 80.</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-go" data-lang="go"><span style="color:#f92672">package</span> <span style="color:#a6e22e">main</span>
+<pre><code>package main
 
-<span style="color:#f92672">import</span> (
-    <span style="color:#e6db74">&#34;fmt&#34;</span>
-    <span style="color:#e6db74">&#34;net&#34;</span>
-    <span style="color:#e6db74">&#34;os&#34;</span>
+import (
+    &quot;fmt&quot;
+    &quot;net&quot;
+    &quot;os&quot;
 )
 
-<span style="color:#66d9ef">func</span> <span style="color:#a6e22e">main</span>() {
-    <span style="color:#66d9ef">if</span> <span style="color:#a6e22e">_</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">net</span>.<span style="color:#a6e22e">Listen</span>(<span style="color:#e6db74">&#34;tcp&#34;</span>, <span style="color:#e6db74">&#34;:80&#34;</span>); <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
-        <span style="color:#a6e22e">fmt</span>.<span style="color:#a6e22e">Fprintln</span>(<span style="color:#a6e22e">os</span>.<span style="color:#a6e22e">Stdout</span>, <span style="color:#a6e22e">err</span>)
-        <span style="color:#a6e22e">os</span>.<span style="color:#a6e22e">Exit</span>(<span style="color:#ae81ff">2</span>)
+func main() {
+    if _, err := net.Listen(&quot;tcp&quot;, &quot;:80&quot;); err != nil {
+        fmt.Fprintln(os.Stdout, err)
+        os.Exit(2)
     }
-    <span style="color:#a6e22e">fmt</span>.<span style="color:#a6e22e">Println</span>(<span style="color:#e6db74">&#34;success&#34;</span>)
+    fmt.Println(&quot;success&quot;)
 }
-</code></pre></div><p>What happens when we compile and run this?</p>
+</code></pre><p>What happens when we compile and run this?</p>
 <pre><code>$ go build -o listen listen.go
 $ ./listen
 listen tcp :80: bind: permission denied

@@ -40,140 +40,141 @@ if (!doNotTrack) {
 </div>
 
 <main>
+<p>NOTE: For an updated version of this post, see the GopherCon 2019 talk <em>&ldquo;PKI for Gopher&rdquo;</em>. (<a href="https://www.youtube.com/watch?v=VwPQKS9Njv0">Video</a>, <a href="https://docs.google.com/presentation/d/16y-HTvL7ASzf9JspCBX0OVmhwUWVoLj9epzJfNMQRr8/edit">Slides</a>)</p>
 <p>For a long time my knowledge of TLS was Googling &ldquo;how to configure nginx as an HTTPS proxy.&rdquo; Okay, the cert goes here and the key goes here, that's my job done. But with more and more pushes for things HTTPS and HTTP/2 (which defaults to using TLS), it sometimes helps to understand this a little better.</p>
 <p>Unfortunately a lot of the articles on this topic are either too high level or too specific and, when I need to learn the topic, I ended up just reading the Go documentation.</p>
 <p>This is an article to explain how TLS (and HTTPS) works by creating and using certificates in running servers with Go. If you want, you can follow along by programming the examples in another window.</p>
 <h2 id="public-and-private-key-encryption">Public and Private Key Encryption</h2>
 <p>Public and private key cryptography is awesome and a good place to start. If you've ever used GitHub or had to log into an EC2 instance, you've seen these things before. A very common use case is to use them to prove your identity. You place your public key where anyone can see it, then use the private one to later confirm you are who you say you are.</p>
 <p>Go has a fairly straight forward <code>crypto/rsa</code> package in the standard library. First we can just generate a new, random pair.</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-go" data-lang="go"><span style="color:#75715e">// create a public/private keypair
-</span><span style="color:#75715e"></span><span style="color:#75715e">// NOTE: Use crypto/rand not math/rand
-</span><span style="color:#75715e"></span><span style="color:#a6e22e">privKey</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">rsa</span>.<span style="color:#a6e22e">GenerateKey</span>(<span style="color:#a6e22e">rand</span>.<span style="color:#a6e22e">Reader</span>, <span style="color:#ae81ff">2048</span>)
-<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
-    <span style="color:#a6e22e">log</span>.<span style="color:#a6e22e">Fatalf</span>(<span style="color:#e6db74">&#34;generating random key: %v&#34;</span>, <span style="color:#a6e22e">err</span>)
+<pre><code>// create a public/private keypair
+// NOTE: Use crypto/rand not math/rand
+privKey, err := rsa.GenerateKey(rand.Reader, 2048)
+if err != nil {
+    log.Fatalf(&quot;generating random key: %v&quot;, err)
 }
-</code></pre></div><p>Here's how this works. Things encrypt with a public key can only be decrypted by its paired private key. This involves some tricks with some very large prime numbers, but that's for another article.</p>
+</code></pre><p>Here's how this works. Things encrypt with a public key can only be decrypted by its paired private key. This involves some tricks with some very large prime numbers, but that's for another article.</p>
 <p>Let's actually encrypt something using the public key.</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-go" data-lang="go"><span style="color:#a6e22e">plainText</span> <span style="color:#f92672">:=</span> []byte(<span style="color:#e6db74">&#34;The bourgeois human is a virus on the hard drive of the working robot!&#34;</span>)
+<pre><code>plainText := []byte(&quot;The bourgeois human is a virus on the hard drive of the working robot!&quot;)
 
-<span style="color:#75715e">// use the public key to encrypt the message
-</span><span style="color:#75715e"></span><span style="color:#a6e22e">cipherText</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">rsa</span>.<span style="color:#a6e22e">EncryptPKCS1v15</span>(<span style="color:#a6e22e">rand</span>.<span style="color:#a6e22e">Reader</span>, <span style="color:#f92672">&amp;</span><span style="color:#a6e22e">privKey</span>.<span style="color:#a6e22e">PublicKey</span>, <span style="color:#a6e22e">plainText</span>)
-<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
-    <span style="color:#a6e22e">log</span>.<span style="color:#a6e22e">Fatalf</span>(<span style="color:#e6db74">&#34;could not encrypt data: %v&#34;</span>, <span style="color:#a6e22e">err</span>)
+// use the public key to encrypt the message
+cipherText, err := rsa.EncryptPKCS1v15(rand.Reader, &amp;privKey.PublicKey, plainText)
+if err != nil {
+    log.Fatalf(&quot;could not encrypt data: %v&quot;, err)
 }
-<span style="color:#a6e22e">fmt</span>.<span style="color:#a6e22e">Printf</span>(<span style="color:#e6db74">&#34;%s\n&#34;</span>, <span style="color:#a6e22e">strconv</span>.<span style="color:#a6e22e">Quote</span>(string(<span style="color:#a6e22e">cipherText</span>)))
-</code></pre></div><p>As you can see, it's even an effort to print the junk that's results from this encryption.</p>
+fmt.Printf(&quot;%s\n&quot;, strconv.Quote(string(cipherText)))
+</code></pre><p>As you can see, it's even an effort to print the junk that's results from this encryption.</p>
 <pre><code>&quot;\x83\xcc\x11\xe9\x1b&lt;\x9a\xab\xa3H\fq\xfb]\xb7\x8a\xd3\xfb3\xad\xfe\x01\x1d\x86d\x1e\xf7\xf0t.\xc8\x03f\xd7J\xd6\u0086\\\xb83\xad\x82\xb0I\xe51:\xe0\x8c\x94\xfe}\xb5\x17\xeb_\x13S\x17\xfah\xbe\xcd=3\a\xee\xd0u\xd0\xf1$\xc2\b\xf0`\xb2x\xbd\x99\xc0\xf8\xbc`\xe7\x8f黭g\xe1\xa1j\x89\x15\xee,\u061d\xff\xfe\xb7\x84\xbf\x8b}t٫\xa0\x10Y)\xaa\xc4M\x18\xac5\xc9ٗD&lt;\xc1&amp;f\xeb\xf9S(\x97s\x01\xc2s\x1cu\a\x82\x1e1q\xe83Č9\x04\x17\x8c\x1b\xba`\x9f,.\xdc|%6\xa5f\xaf\xdb\xd51\xabJ\xf6#\x11+S=px\xcc +87\xe5\x16\x062\xb6\xda\x0e~_&gt;f,S\x80\xb7\xca\x12w\xf1\xaa\x83\xe3\xde j\xc2\xfd\x1e\xe6s\x88|\xf2?{\x80\x8c\xfb\x916\xbf\xb8\xc7\xee\x81U\x9e1\xc1s\x86p\x01\x80]r\xa5\v\xdb|\x84ץ\xce8\xb7\x0f\xf6\xd7\x02E\xc5u&quot;
 </code></pre><p>To decrypt this cipher text, we simply use the private key.</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-go" data-lang="go"><span style="color:#75715e">// decrypt with the private key
-</span><span style="color:#75715e"></span><span style="color:#a6e22e">decryptedText</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">rsa</span>.<span style="color:#a6e22e">DecryptPKCS1v15</span>(<span style="color:#66d9ef">nil</span>, <span style="color:#a6e22e">privKey</span>, <span style="color:#a6e22e">cipherText</span>)
-<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
-	<span style="color:#a6e22e">log</span>.<span style="color:#a6e22e">Fatalf</span>(<span style="color:#e6db74">&#34;error decrypting cipher text: %v&#34;</span>, <span style="color:#a6e22e">err</span>)
+<pre><code>// decrypt with the private key
+decryptedText, err := rsa.DecryptPKCS1v15(nil, privKey, cipherText)
+if err != nil {
+	log.Fatalf(&quot;error decrypting cipher text: %v&quot;, err)
 }
-<span style="color:#a6e22e">fmt</span>.<span style="color:#a6e22e">Printf</span>(<span style="color:#e6db74">&#34;%s\n&#34;</span>, <span style="color:#a6e22e">decryptedText</span>)
-<span style="color:#75715e">// The bourgeois human is a virus on the hard drive of the working robot!
-</span></code></pre></div><p>Cool, but what good is this?</p>
+fmt.Printf(&quot;%s\n&quot;, decryptedText)
+// The bourgeois human is a virus on the hard drive of the working robot!
+</code></pre><p>Cool, but what good is this?</p>
 <p>Let's say I had your public key and, while talking on the Internet, I want to confirm that you are really you. What I could do is think of a random phrase, let's say <code>&quot;Well, that's no ordinary rabbit.&quot;</code> and encrypted it with your public key. You would have to have the private key to decrypt it, and if you where able to say that phrase back to me, I could confirm that I was really talking to you.</p>
 <p>The cool part about this is <strong>you can prove you hold a private key without ever showing it to somebody</strong>.</p>
 <h2 id="digital-signatures">Digital Signatures</h2>
 <p>A second trait of public private key-pairs is the ability to create a digital signature for a given message. These signatures can be used to ensure the validity of the document it signs.</p>
 <p>To to this, the document is run through a hashing algorithm (we'll use SHA256), then the <strong>private</strong> key computes a signature for the hashed results.</p>
 <p>The <strong>public</strong> key can then confirm, again through math we'll ignore, if its private key combined with a particular hash would have created that signature. Here's what that looks like using <code>crypto/rsa</code>.</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-go" data-lang="go"><span style="color:#75715e">// compute the hash of our original plain text
-</span><span style="color:#75715e"></span><span style="color:#a6e22e">hash</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">sha256</span>.<span style="color:#a6e22e">Sum256</span>(<span style="color:#a6e22e">plainText</span>)
-<span style="color:#a6e22e">fmt</span>.<span style="color:#a6e22e">Printf</span>(<span style="color:#e6db74">&#34;The hash of my message is: %#x\n&#34;</span>, <span style="color:#a6e22e">hash</span>)
-<span style="color:#75715e">// The hash of my message is: 0xe6a8502561b8e2328b856b4dbe6a9448d2bf76f02b7820e5d5d4907ed2e6db80
-</span><span style="color:#75715e"></span>
-<span style="color:#75715e">// generate a signature using the private key
-</span><span style="color:#75715e"></span><span style="color:#a6e22e">signature</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">rsa</span>.<span style="color:#a6e22e">SignPKCS1v15</span>(<span style="color:#a6e22e">rand</span>.<span style="color:#a6e22e">Reader</span>, <span style="color:#a6e22e">privKey</span>, <span style="color:#a6e22e">crypto</span>.<span style="color:#a6e22e">SHA256</span>, <span style="color:#a6e22e">hash</span>[:])
-<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
-    <span style="color:#a6e22e">log</span>.<span style="color:#a6e22e">Fatalf</span>(<span style="color:#e6db74">&#34;error creating signature: %v&#34;</span>, <span style="color:#a6e22e">err</span>)
+<pre><code>// compute the hash of our original plain text
+hash := sha256.Sum256(plainText)
+fmt.Printf(&quot;The hash of my message is: %#x\n&quot;, hash)
+// The hash of my message is: 0xe6a8502561b8e2328b856b4dbe6a9448d2bf76f02b7820e5d5d4907ed2e6db80
+
+// generate a signature using the private key
+signature, err := rsa.SignPKCS1v15(rand.Reader, privKey, crypto.SHA256, hash[:])
+if err != nil {
+    log.Fatalf(&quot;error creating signature: %v&quot;, err)
 }
-<span style="color:#75715e">// let&#39;s not print the signature, it&#39;s big and ugly
-</span></code></pre></div><p>We can then attempt to verify the result with different combinations of messages and signatures.</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-go" data-lang="go"><span style="color:#75715e">// use a public key to verify the signature for a message was created by the private key
-</span><span style="color:#75715e"></span><span style="color:#a6e22e">verify</span> <span style="color:#f92672">:=</span> <span style="color:#66d9ef">func</span>(<span style="color:#a6e22e">pub</span> <span style="color:#f92672">*</span><span style="color:#a6e22e">rsa</span>.<span style="color:#a6e22e">PublicKey</span>, <span style="color:#a6e22e">msg</span>, <span style="color:#a6e22e">signature</span> []<span style="color:#66d9ef">byte</span>) <span style="color:#66d9ef">error</span> {
-    <span style="color:#a6e22e">hash</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">sha256</span>.<span style="color:#a6e22e">Sum256</span>(<span style="color:#a6e22e">msg</span>)
-    <span style="color:#66d9ef">return</span> <span style="color:#a6e22e">rsa</span>.<span style="color:#a6e22e">VerifyPKCS1v15</span>(<span style="color:#a6e22e">pub</span>, <span style="color:#a6e22e">crypto</span>.<span style="color:#a6e22e">SHA256</span>, <span style="color:#a6e22e">hash</span>[:], <span style="color:#a6e22e">signature</span>)
+// let's not print the signature, it's big and ugly
+</code></pre><p>We can then attempt to verify the result with different combinations of messages and signatures.</p>
+<pre><code>// use a public key to verify the signature for a message was created by the private key
+verify := func(pub *rsa.PublicKey, msg, signature []byte) error {
+    hash := sha256.Sum256(msg)
+    return rsa.VerifyPKCS1v15(pub, crypto.SHA256, hash[:], signature)
 }
 
-<span style="color:#a6e22e">fmt</span>.<span style="color:#a6e22e">Println</span>(<span style="color:#a6e22e">verify</span>(<span style="color:#f92672">&amp;</span><span style="color:#a6e22e">privKey</span>.<span style="color:#a6e22e">PublicKey</span>, <span style="color:#a6e22e">plainText</span>, []byte(<span style="color:#e6db74">&#34;a bad signature&#34;</span>)))
-<span style="color:#75715e">// crypto/rsa: verification error
-</span><span style="color:#75715e"></span><span style="color:#a6e22e">fmt</span>.<span style="color:#a6e22e">Println</span>(<span style="color:#a6e22e">verify</span>(<span style="color:#f92672">&amp;</span><span style="color:#a6e22e">privKey</span>.<span style="color:#a6e22e">PublicKey</span>, []byte(<span style="color:#e6db74">&#34;a different plain text&#34;</span>), <span style="color:#a6e22e">signature</span>))
-<span style="color:#75715e">// crypto/rsa: verification error
-</span><span style="color:#75715e"></span><span style="color:#a6e22e">fmt</span>.<span style="color:#a6e22e">Println</span>(<span style="color:#a6e22e">verify</span>(<span style="color:#f92672">&amp;</span><span style="color:#a6e22e">privKey</span>.<span style="color:#a6e22e">PublicKey</span>, <span style="color:#a6e22e">plainText</span>, <span style="color:#a6e22e">signature</span>))
-<span style="color:#75715e">// &lt;nil&gt;
-</span></code></pre></div><p>What this signature is doing is confirming that a document has not been changed since the private key signed it. And because a public key is public and can be posted anywhere, anyone can run this same test.</p>
+fmt.Println(verify(&amp;privKey.PublicKey, plainText, []byte(&quot;a bad signature&quot;)))
+// crypto/rsa: verification error
+fmt.Println(verify(&amp;privKey.PublicKey, []byte(&quot;a different plain text&quot;), signature))
+// crypto/rsa: verification error
+fmt.Println(verify(&amp;privKey.PublicKey, plainText, signature))
+// &lt;nil&gt;
+</code></pre><p>What this signature is doing is confirming that a document has not been changed since the private key signed it. And because a public key is public and can be posted anywhere, anyone can run this same test.</p>
 <p>This might be very helpful for say, a certificate authority, who wants to be able to distribute documents which can't be altered without everyone detecting.</p>
 <h2 id="go-and-x509">Go and x509</h2>
 <p>Go's <code>crypto/x509</code> package is what I'll be using to actually generate and work with certificates. It's a package with a lot of options and a somewhat intimidating interface. For instance, the ridiculous number of fields on the <!-- raw HTML omitted --><code>Certificate</code><!-- raw HTML omitted --> struct.</p>
 <p>To create a new certificate, we first have to provide a template for one. Because we'll be doing this a couple times, I've made a helper function to do some of the busy work.</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-go" data-lang="go"><span style="color:#75715e">// helper function to create a cert template with a serial number and other required fields
-</span><span style="color:#75715e"></span><span style="color:#66d9ef">func</span> <span style="color:#a6e22e">CertTemplate</span>() (<span style="color:#f92672">*</span><span style="color:#a6e22e">x509</span>.<span style="color:#a6e22e">Certificate</span>, <span style="color:#66d9ef">error</span>) {
-    <span style="color:#75715e">// generate a random serial number (a real cert authority would have some logic behind this)
-</span><span style="color:#75715e"></span>    <span style="color:#a6e22e">serialNumberLimit</span> <span style="color:#f92672">:=</span> new(<span style="color:#a6e22e">big</span>.<span style="color:#a6e22e">Int</span>).<span style="color:#a6e22e">Lsh</span>(<span style="color:#a6e22e">big</span>.<span style="color:#a6e22e">NewInt</span>(<span style="color:#ae81ff">1</span>), <span style="color:#ae81ff">128</span>)
-    <span style="color:#a6e22e">serialNumber</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">rand</span>.<span style="color:#a6e22e">Int</span>(<span style="color:#a6e22e">rand</span>.<span style="color:#a6e22e">Reader</span>, <span style="color:#a6e22e">serialNumberLimit</span>)
-    <span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
-        <span style="color:#66d9ef">return</span> <span style="color:#66d9ef">nil</span>, <span style="color:#a6e22e">errors</span>.<span style="color:#a6e22e">New</span>(<span style="color:#e6db74">&#34;failed to generate serial number: &#34;</span> <span style="color:#f92672">+</span> <span style="color:#a6e22e">err</span>.<span style="color:#a6e22e">Error</span>())
+<pre><code>// helper function to create a cert template with a serial number and other required fields
+func CertTemplate() (*x509.Certificate, error) {
+    // generate a random serial number (a real cert authority would have some logic behind this)
+    serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
+    serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
+    if err != nil {
+        return nil, errors.New(&quot;failed to generate serial number: &quot; + err.Error())
     }
 
-    <span style="color:#a6e22e">tmpl</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">x509</span>.<span style="color:#a6e22e">Certificate</span>{
-        <span style="color:#a6e22e">SerialNumber</span>:          <span style="color:#a6e22e">serialNumber</span>,
-        <span style="color:#a6e22e">Subject</span>:               <span style="color:#a6e22e">pkix</span>.<span style="color:#a6e22e">Name</span>{<span style="color:#a6e22e">Organization</span>: []<span style="color:#66d9ef">string</span>{<span style="color:#e6db74">&#34;Yhat, Inc.&#34;</span>}},
-        <span style="color:#a6e22e">SignatureAlgorithm</span>:    <span style="color:#a6e22e">x509</span>.<span style="color:#a6e22e">SHA256WithRSA</span>,
-        <span style="color:#a6e22e">NotBefore</span>:             <span style="color:#a6e22e">time</span>.<span style="color:#a6e22e">Now</span>(),
-        <span style="color:#a6e22e">NotAfter</span>:              <span style="color:#a6e22e">time</span>.<span style="color:#a6e22e">Now</span>().<span style="color:#a6e22e">Add</span>(<span style="color:#a6e22e">time</span>.<span style="color:#a6e22e">Hour</span>), <span style="color:#75715e">// valid for an hour
-</span><span style="color:#75715e"></span>        <span style="color:#a6e22e">BasicConstraintsValid</span>: <span style="color:#66d9ef">true</span>,
+    tmpl := x509.Certificate{
+        SerialNumber:          serialNumber,
+        Subject:               pkix.Name{Organization: []string{&quot;Yhat, Inc.&quot;}},
+        SignatureAlgorithm:    x509.SHA256WithRSA,
+        NotBefore:             time.Now(),
+        NotAfter:              time.Now().Add(time.Hour), // valid for an hour
+        BasicConstraintsValid: true,
     }
-    <span style="color:#66d9ef">return</span> <span style="color:#f92672">&amp;</span><span style="color:#a6e22e">tmpl</span>, <span style="color:#66d9ef">nil</span>
+    return &amp;tmpl, nil
 }
-</code></pre></div><p>Certificates are public keys with some attached information (like what domains they work for). In order to create a certificate, we need to both specify that information and provide a public key.</p>
+</code></pre><p>Certificates are public keys with some attached information (like what domains they work for). In order to create a certificate, we need to both specify that information and provide a public key.</p>
 <p>In this next block, we create a key-pair called <code>rootKey</code> and a certificate template called <code>rootCertTmpl</code>, then fill out some information about what we want to use it for.</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-go" data-lang="go"><span style="color:#75715e">// generate a new key-pair
-</span><span style="color:#75715e"></span><span style="color:#a6e22e">rootKey</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">rsa</span>.<span style="color:#a6e22e">GenerateKey</span>(<span style="color:#a6e22e">rand</span>.<span style="color:#a6e22e">Reader</span>, <span style="color:#ae81ff">2048</span>)
-<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
-	<span style="color:#a6e22e">log</span>.<span style="color:#a6e22e">Fatalf</span>(<span style="color:#e6db74">&#34;generating random key: %v&#34;</span>, <span style="color:#a6e22e">err</span>)
+<pre><code>// generate a new key-pair
+rootKey, err := rsa.GenerateKey(rand.Reader, 2048)
+if err != nil {
+	log.Fatalf(&quot;generating random key: %v&quot;, err)
 }
 
-<span style="color:#a6e22e">rootCertTmpl</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">CertTemplate</span>()
-<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
-	<span style="color:#a6e22e">log</span>.<span style="color:#a6e22e">Fatalf</span>(<span style="color:#e6db74">&#34;creating cert template: %v&#34;</span>, <span style="color:#a6e22e">err</span>)
+rootCertTmpl, err := CertTemplate()
+if err != nil {
+	log.Fatalf(&quot;creating cert template: %v&quot;, err)
 }
-<span style="color:#75715e">// describe what the certificate will be used for
-</span><span style="color:#75715e"></span><span style="color:#a6e22e">rootCertTmpl</span>.<span style="color:#a6e22e">IsCA</span> = <span style="color:#66d9ef">true</span>
-<span style="color:#a6e22e">rootCertTmpl</span>.<span style="color:#a6e22e">KeyUsage</span> = <span style="color:#a6e22e">x509</span>.<span style="color:#a6e22e">KeyUsageCertSign</span> | <span style="color:#a6e22e">x509</span>.<span style="color:#a6e22e">KeyUsageDigitalSignature</span>
-<span style="color:#a6e22e">rootCertTmpl</span>.<span style="color:#a6e22e">ExtKeyUsage</span> = []<span style="color:#a6e22e">x509</span>.<span style="color:#a6e22e">ExtKeyUsage</span>{<span style="color:#a6e22e">x509</span>.<span style="color:#a6e22e">ExtKeyUsageServerAuth</span>, <span style="color:#a6e22e">x509</span>.<span style="color:#a6e22e">ExtKeyUsageClientAuth</span>}
-<span style="color:#a6e22e">rootCertTmpl</span>.<span style="color:#a6e22e">IPAddresses</span> = []<span style="color:#a6e22e">net</span>.<span style="color:#a6e22e">IP</span>{<span style="color:#a6e22e">net</span>.<span style="color:#a6e22e">ParseIP</span>(<span style="color:#e6db74">&#34;127.0.0.1&#34;</span>)}
-</code></pre></div><p>Now the fun part.</p>
+// describe what the certificate will be used for
+rootCertTmpl.IsCA = true
+rootCertTmpl.KeyUsage = x509.KeyUsageCertSign | x509.KeyUsageDigitalSignature
+rootCertTmpl.ExtKeyUsage = []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth}
+rootCertTmpl.IPAddresses = []net.IP{net.ParseIP(&quot;127.0.0.1&quot;)}
+</code></pre><p>Now the fun part.</p>
 <h2 id="making-a-selfsigned-certificate">Making a Self-Signed Certificate</h2>
 <p>Okay, it's time to actually create a certificate.</p>
 <p>Certificates must be signed by the private key of a parent certificate. Of course, there always has to be a certificate without a parent, and in these cases the certificate's private key must be used in lieu of a parent's.</p>
 <p><code>x509.CreateCertificate</code> takes 4 arguments (plus a source of randomness). The template of the certificate we want to create, the public key we want to wrap, the parent certificate, and the parent's private key.</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-go" data-lang="go"><span style="color:#66d9ef">func</span> <span style="color:#a6e22e">CreateCert</span>(<span style="color:#a6e22e">template</span>, <span style="color:#a6e22e">parent</span> <span style="color:#f92672">*</span><span style="color:#a6e22e">x509</span>.<span style="color:#a6e22e">Certificate</span>, <span style="color:#a6e22e">pub</span> <span style="color:#66d9ef">interface</span>{}, <span style="color:#a6e22e">parentPriv</span> <span style="color:#66d9ef">interface</span>{}) (
-    <span style="color:#a6e22e">cert</span> <span style="color:#f92672">*</span><span style="color:#a6e22e">x509</span>.<span style="color:#a6e22e">Certificate</span>, <span style="color:#a6e22e">certPEM</span> []<span style="color:#66d9ef">byte</span>, <span style="color:#a6e22e">err</span> <span style="color:#66d9ef">error</span>) {
+<pre><code>func CreateCert(template, parent *x509.Certificate, pub interface{}, parentPriv interface{}) (
+    cert *x509.Certificate, certPEM []byte, err error) {
 
-    <span style="color:#a6e22e">certDER</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">x509</span>.<span style="color:#a6e22e">CreateCertificate</span>(<span style="color:#a6e22e">rand</span>.<span style="color:#a6e22e">Reader</span>, <span style="color:#a6e22e">template</span>, <span style="color:#a6e22e">parent</span>, <span style="color:#a6e22e">pub</span>, <span style="color:#a6e22e">parentPriv</span>)
-    <span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
-        <span style="color:#66d9ef">return</span>
+    certDER, err := x509.CreateCertificate(rand.Reader, template, parent, pub, parentPriv)
+    if err != nil {
+        return
     }
-    <span style="color:#75715e">// parse the resulting certificate so we can use it again
-</span><span style="color:#75715e"></span>    <span style="color:#a6e22e">cert</span>, <span style="color:#a6e22e">err</span> = <span style="color:#a6e22e">x509</span>.<span style="color:#a6e22e">ParseCertificate</span>(<span style="color:#a6e22e">certDER</span>)
-    <span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
-        <span style="color:#66d9ef">return</span>
+    // parse the resulting certificate so we can use it again
+    cert, err = x509.ParseCertificate(certDER)
+    if err != nil {
+        return
     }
-    <span style="color:#75715e">// PEM encode the certificate (this is a standard TLS encoding)
-</span><span style="color:#75715e"></span>    <span style="color:#a6e22e">b</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">pem</span>.<span style="color:#a6e22e">Block</span>{<span style="color:#a6e22e">Type</span>: <span style="color:#e6db74">&#34;CERTIFICATE&#34;</span>, <span style="color:#a6e22e">Bytes</span>: <span style="color:#a6e22e">certDER</span>}
-    <span style="color:#a6e22e">certPEM</span> = <span style="color:#a6e22e">pem</span>.<span style="color:#a6e22e">EncodeToMemory</span>(<span style="color:#f92672">&amp;</span><span style="color:#a6e22e">b</span>)
-    <span style="color:#66d9ef">return</span>
+    // PEM encode the certificate (this is a standard TLS encoding)
+    b := pem.Block{Type: &quot;CERTIFICATE&quot;, Bytes: certDER}
+    certPEM = pem.EncodeToMemory(&amp;b)
+    return
 }
-</code></pre></div><p>To create our self-signed cert (named <code>rootCert</code>), we provide the arguments listed above. But instead of using a parent certificate, the root key's information is used instead.</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-go" data-lang="go"><span style="color:#a6e22e">rootCert</span>, <span style="color:#a6e22e">rootCertPEM</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">CreateCert</span>(<span style="color:#a6e22e">rootCertTmpl</span>, <span style="color:#a6e22e">rootCertTmpl</span>, <span style="color:#f92672">&amp;</span><span style="color:#a6e22e">rootKey</span>.<span style="color:#a6e22e">PublicKey</span>, <span style="color:#a6e22e">rootKey</span>)
-<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
-	<span style="color:#a6e22e">log</span>.<span style="color:#a6e22e">Fatalf</span>(<span style="color:#e6db74">&#34;error creating cert: %v&#34;</span>, <span style="color:#a6e22e">err</span>)
+</code></pre><p>To create our self-signed cert (named <code>rootCert</code>), we provide the arguments listed above. But instead of using a parent certificate, the root key's information is used instead.</p>
+<pre><code>rootCert, rootCertPEM, err := CreateCert(rootCertTmpl, rootCertTmpl, &amp;rootKey.PublicKey, rootKey)
+if err != nil {
+	log.Fatalf(&quot;error creating cert: %v&quot;, err)
 }
-<span style="color:#a6e22e">fmt</span>.<span style="color:#a6e22e">Printf</span>(<span style="color:#e6db74">&#34;%s\n&#34;</span>, <span style="color:#a6e22e">rootCertPEM</span>)
-<span style="color:#a6e22e">fmt</span>.<span style="color:#a6e22e">Printf</span>(<span style="color:#e6db74">&#34;%#x\n&#34;</span>, <span style="color:#a6e22e">rootCert</span>.<span style="color:#a6e22e">Signature</span>) <span style="color:#75715e">// more ugly binary
-</span></code></pre></div><p>While printing out the signature isn't incredibly useful, <code>rootCertPEM</code> should look very familiar for anyone who's configured HTTPS or SSH'd into a server. Here's what my code generated.</p>
+fmt.Printf(&quot;%s\n&quot;, rootCertPEM)
+fmt.Printf(&quot;%#x\n&quot;, rootCert.Signature) // more ugly binary
+</code></pre><p>While printing out the signature isn't incredibly useful, <code>rootCertPEM</code> should look very familiar for anyone who's configured HTTPS or SSH'd into a server. Here's what my code generated.</p>
 <pre><code class="language-nohighlight" data-lang="nohighlight">-----BEGIN CERTIFICATE-----
 MIIC+jCCAeSgAwIBAgIRAK2uh2q3B+iVYia2l87Tch8wCwYJKoZIhvcNAQELMBUx
 EzARBgNVBAoTClloYXQsIEluYy4wHhcNMTUwNjIwMjI1MDEyWhcNMTUwNjIwMjM1
@@ -194,96 +195,96 @@ K5Vulo8NmzMOCcBjAJ9B0IXOLg9ba+dyiOK8pIayBiX28FRaxRUiU31iEPI8gbTN
 -----END CERTIFICATE-----
 </code></pre><p>Right away we can use this PEM encoded block in a server. However, let's remember that a certificate is just a public key. To prove ownership of a certificate you must have the private key as well. In the case of our server, we have to load <code>rootKey</code> if we want to use <code>rootCert</code>.</p>
 <p>To keep this code cleaner, I'm going to use the <!-- raw HTML omitted --><code>httptest</code><!-- raw HTML omitted --> package, which will allow us to spin up and shut down servers on a whim.</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-go" data-lang="go"><span style="color:#75715e">// PEM encode the private key
-</span><span style="color:#75715e"></span><span style="color:#a6e22e">rootKeyPEM</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">pem</span>.<span style="color:#a6e22e">EncodeToMemory</span>(<span style="color:#f92672">&amp;</span><span style="color:#a6e22e">pem</span>.<span style="color:#a6e22e">Block</span>{
-	<span style="color:#a6e22e">Type</span>: <span style="color:#e6db74">&#34;RSA PRIVATE KEY&#34;</span>, <span style="color:#a6e22e">Bytes</span>: <span style="color:#a6e22e">x509</span>.<span style="color:#a6e22e">MarshalPKCS1PrivateKey</span>(<span style="color:#a6e22e">rootKey</span>),
+<pre><code>// PEM encode the private key
+rootKeyPEM := pem.EncodeToMemory(&amp;pem.Block{
+	Type: &quot;RSA PRIVATE KEY&quot;, Bytes: x509.MarshalPKCS1PrivateKey(rootKey),
 })
 
-<span style="color:#75715e">// Create a TLS cert using the private key and certificate
-</span><span style="color:#75715e"></span><span style="color:#a6e22e">rootTLSCert</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">tls</span>.<span style="color:#a6e22e">X509KeyPair</span>(<span style="color:#a6e22e">rootCertPEM</span>, <span style="color:#a6e22e">rootKeyPEM</span>)
-<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
-	<span style="color:#a6e22e">log</span>.<span style="color:#a6e22e">Fatalf</span>(<span style="color:#e6db74">&#34;invalid key pair: %v&#34;</span>, <span style="color:#a6e22e">err</span>)
+// Create a TLS cert using the private key and certificate
+rootTLSCert, err := tls.X509KeyPair(rootCertPEM, rootKeyPEM)
+if err != nil {
+	log.Fatalf(&quot;invalid key pair: %v&quot;, err)
 }
 
-<span style="color:#a6e22e">ok</span> <span style="color:#f92672">:=</span> <span style="color:#66d9ef">func</span>(<span style="color:#a6e22e">w</span> <span style="color:#a6e22e">http</span>.<span style="color:#a6e22e">ResponseWriter</span>, <span style="color:#a6e22e">r</span> <span style="color:#f92672">*</span><span style="color:#a6e22e">http</span>.<span style="color:#a6e22e">Request</span>) { <span style="color:#a6e22e">w</span>.<span style="color:#a6e22e">Write</span>([]byte(<span style="color:#e6db74">&#34;HI!&#34;</span>)) }
-<span style="color:#a6e22e">s</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">httptest</span>.<span style="color:#a6e22e">NewUnstartedServer</span>(<span style="color:#a6e22e">http</span>.<span style="color:#a6e22e">HandlerFunc</span>(<span style="color:#a6e22e">ok</span>))
+ok := func(w http.ResponseWriter, r *http.Request) { w.Write([]byte(&quot;HI!&quot;)) }
+s := httptest.NewUnstartedServer(http.HandlerFunc(ok))
 
-<span style="color:#75715e">// Configure the server to present the certficate we created
-</span><span style="color:#75715e"></span><span style="color:#a6e22e">s</span>.<span style="color:#a6e22e">TLS</span> = <span style="color:#f92672">&amp;</span><span style="color:#a6e22e">tls</span>.<span style="color:#a6e22e">Config</span>{
-	<span style="color:#a6e22e">Certificates</span>: []<span style="color:#a6e22e">tls</span>.<span style="color:#a6e22e">Certificate</span>{<span style="color:#a6e22e">rootTLSCert</span>},
+// Configure the server to present the certficate we created
+s.TLS = &amp;tls.Config{
+	Certificates: []tls.Certificate{rootTLSCert},
 }
-</code></pre></div><p>We can now make a HTTP request to the server, where we get a very familiar error message.</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-go" data-lang="go"><span style="color:#75715e">// make a HTTPS request to the server
-</span><span style="color:#75715e"></span><span style="color:#a6e22e">s</span>.<span style="color:#a6e22e">StartTLS</span>()
-<span style="color:#a6e22e">_</span>, <span style="color:#a6e22e">err</span> = <span style="color:#a6e22e">http</span>.<span style="color:#a6e22e">Get</span>(<span style="color:#a6e22e">s</span>.<span style="color:#a6e22e">URL</span>)
-<span style="color:#a6e22e">s</span>.<span style="color:#a6e22e">Close</span>()
+</code></pre><p>We can now make a HTTP request to the server, where we get a very familiar error message.</p>
+<pre><code>// make a HTTPS request to the server
+s.StartTLS()
+_, err = http.Get(s.URL)
+s.Close()
 
-<span style="color:#a6e22e">fmt</span>.<span style="color:#a6e22e">Println</span>(<span style="color:#a6e22e">err</span>)
-<span style="color:#75715e">// http: TLS handshake error from 127.0.0.1:52944: remote error: bad certificate
-</span></code></pre></div><p>The <code>net/http</code> package has rejected the certificate.</p>
+fmt.Println(err)
+// http: TLS handshake error from 127.0.0.1:52944: remote error: bad certificate
+</code></pre><p>The <code>net/http</code> package has rejected the certificate.</p>
 <p>By default, <code>net/http</code> loads trusted certificates (public keys) from your computer. These are the same ones your browser uses when you surf the web. The issue is, the certificate we create, which the test server provided, has a digital signature. But, none of the public keys trusted by your browser validated that signature.</p>
 <h2 id="getting-the-client-to-trust-the-server">Getting the Client to Trust the Server</h2>
 <p>Rather than using a self-signed certificate, let's create a setup that mimics a real situation where a certificate authority provides a organization with a cert for their website. To do this, we'll pretend the <code>rootCert</code> we created before belongs to the certificate authority, and we'll be attempting to create another certificate for our server.</p>
 <p>First things first, we'll create a new key-pair and template.</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-go" data-lang="go"><span style="color:#75715e">// create a key-pair for the server
-</span><span style="color:#75715e"></span><span style="color:#a6e22e">servKey</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">rsa</span>.<span style="color:#a6e22e">GenerateKey</span>(<span style="color:#a6e22e">rand</span>.<span style="color:#a6e22e">Reader</span>, <span style="color:#ae81ff">2048</span>)
-<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
-	<span style="color:#a6e22e">log</span>.<span style="color:#a6e22e">Fatalf</span>(<span style="color:#e6db74">&#34;generating random key: %v&#34;</span>, <span style="color:#a6e22e">err</span>)
+<pre><code>// create a key-pair for the server
+servKey, err := rsa.GenerateKey(rand.Reader, 2048)
+if err != nil {
+	log.Fatalf(&quot;generating random key: %v&quot;, err)
 }
 
-<span style="color:#75715e">// create a template for the server
-</span><span style="color:#75715e"></span><span style="color:#a6e22e">servCertTmpl</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">CertTemplate</span>()
-<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
-	<span style="color:#a6e22e">log</span>.<span style="color:#a6e22e">Fatalf</span>(<span style="color:#e6db74">&#34;creating cert template: %v&#34;</span>, <span style="color:#a6e22e">err</span>)
+// create a template for the server
+servCertTmpl, err := CertTemplate()
+if err != nil {
+	log.Fatalf(&quot;creating cert template: %v&quot;, err)
 }
-<span style="color:#a6e22e">servCertTmpl</span>.<span style="color:#a6e22e">KeyUsage</span> = <span style="color:#a6e22e">x509</span>.<span style="color:#a6e22e">KeyUsageDigitalSignature</span>
-<span style="color:#a6e22e">servCertTmpl</span>.<span style="color:#a6e22e">ExtKeyUsage</span> = []<span style="color:#a6e22e">x509</span>.<span style="color:#a6e22e">ExtKeyUsage</span>{<span style="color:#a6e22e">x509</span>.<span style="color:#a6e22e">ExtKeyUsageServerAuth</span>}
-<span style="color:#a6e22e">servCertTmpl</span>.<span style="color:#a6e22e">IPAddresses</span> = []<span style="color:#a6e22e">net</span>.<span style="color:#a6e22e">IP</span>{<span style="color:#a6e22e">net</span>.<span style="color:#a6e22e">ParseIP</span>(<span style="color:#e6db74">&#34;127.0.0.1&#34;</span>)}
-</code></pre></div><p>To create the server certificate, we're going to use a real parent this time. And again, we provide a public key for the certificate, and the parents private key (<code>rootKey</code>) to do the signing.</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-go" data-lang="go"><span style="color:#75715e">// create a certificate which wraps the server&#39;s public key, sign it with the root private key
-</span><span style="color:#75715e"></span><span style="color:#a6e22e">_</span>, <span style="color:#a6e22e">servCertPEM</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">CreateCert</span>(<span style="color:#a6e22e">servCertTmpl</span>, <span style="color:#a6e22e">rootCert</span>, <span style="color:#f92672">&amp;</span><span style="color:#a6e22e">servKey</span>.<span style="color:#a6e22e">PublicKey</span>, <span style="color:#a6e22e">rootKey</span>)
-<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
-	<span style="color:#a6e22e">log</span>.<span style="color:#a6e22e">Fatalf</span>(<span style="color:#e6db74">&#34;error creating cert: %v&#34;</span>, <span style="color:#a6e22e">err</span>)
+servCertTmpl.KeyUsage = x509.KeyUsageDigitalSignature
+servCertTmpl.ExtKeyUsage = []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}
+servCertTmpl.IPAddresses = []net.IP{net.ParseIP(&quot;127.0.0.1&quot;)}
+</code></pre><p>To create the server certificate, we're going to use a real parent this time. And again, we provide a public key for the certificate, and the parents private key (<code>rootKey</code>) to do the signing.</p>
+<pre><code>// create a certificate which wraps the server's public key, sign it with the root private key
+_, servCertPEM, err := CreateCert(servCertTmpl, rootCert, &amp;servKey.PublicKey, rootKey)
+if err != nil {
+	log.Fatalf(&quot;error creating cert: %v&quot;, err)
 }
-</code></pre></div><p>We now have a PEM encoded certificate. To use this in a server, we have to have the private key to prove we own it.</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-go" data-lang="go"><span style="color:#75715e">// provide the private key and the cert
-</span><span style="color:#75715e"></span><span style="color:#a6e22e">servKeyPEM</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">pem</span>.<span style="color:#a6e22e">EncodeToMemory</span>(<span style="color:#f92672">&amp;</span><span style="color:#a6e22e">pem</span>.<span style="color:#a6e22e">Block</span>{
-	<span style="color:#a6e22e">Type</span>: <span style="color:#e6db74">&#34;RSA PRIVATE KEY&#34;</span>, <span style="color:#a6e22e">Bytes</span>: <span style="color:#a6e22e">x509</span>.<span style="color:#a6e22e">MarshalPKCS1PrivateKey</span>(<span style="color:#a6e22e">servKey</span>),
+</code></pre><p>We now have a PEM encoded certificate. To use this in a server, we have to have the private key to prove we own it.</p>
+<pre><code>// provide the private key and the cert
+servKeyPEM := pem.EncodeToMemory(&amp;pem.Block{
+	Type: &quot;RSA PRIVATE KEY&quot;, Bytes: x509.MarshalPKCS1PrivateKey(servKey),
 })
-<span style="color:#a6e22e">servTLSCert</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">tls</span>.<span style="color:#a6e22e">X509KeyPair</span>(<span style="color:#a6e22e">servCertPEM</span>, <span style="color:#a6e22e">servKeyPEM</span>)
-<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
-	<span style="color:#a6e22e">log</span>.<span style="color:#a6e22e">Fatalf</span>(<span style="color:#e6db74">&#34;invalid key pair: %v&#34;</span>, <span style="color:#a6e22e">err</span>)
+servTLSCert, err := tls.X509KeyPair(servCertPEM, servKeyPEM)
+if err != nil {
+	log.Fatalf(&quot;invalid key pair: %v&quot;, err)
 }
-<span style="color:#75715e">// create another test server and use the certificate
-</span><span style="color:#75715e"></span><span style="color:#a6e22e">s</span> = <span style="color:#a6e22e">httptest</span>.<span style="color:#a6e22e">NewUnstartedServer</span>(<span style="color:#a6e22e">http</span>.<span style="color:#a6e22e">HandlerFunc</span>(<span style="color:#a6e22e">ok</span>))
-<span style="color:#a6e22e">s</span>.<span style="color:#a6e22e">TLS</span> = <span style="color:#f92672">&amp;</span><span style="color:#a6e22e">tls</span>.<span style="color:#a6e22e">Config</span>{
-	<span style="color:#a6e22e">Certificates</span>: []<span style="color:#a6e22e">tls</span>.<span style="color:#a6e22e">Certificate</span>{<span style="color:#a6e22e">servTLSCert</span>},
+// create another test server and use the certificate
+s = httptest.NewUnstartedServer(http.HandlerFunc(ok))
+s.TLS = &amp;tls.Config{
+	Certificates: []tls.Certificate{servTLSCert},
 }
-</code></pre></div><p>If we made another request here, we'd still be in the same situation as before when our client reject the certificate.</p>
+</code></pre><p>If we made another request here, we'd still be in the same situation as before when our client reject the certificate.</p>
 <p>To avoid this, we need to create a client which &ldquo;trusts&rdquo; <code>servCert</code>. Specifically, we have to trust a public key which validates <code>servCert</code>'s signature. Since we use the <code>root</code> key-pair to sign the certificate, if we trust <code>rootCert</code> (the public key), we'll trust the server's certificate.</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-go" data-lang="go"><span style="color:#75715e">// create a pool of trusted certs
-</span><span style="color:#75715e"></span><span style="color:#a6e22e">certPool</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">x509</span>.<span style="color:#a6e22e">NewCertPool</span>()
-<span style="color:#a6e22e">certPool</span>.<span style="color:#a6e22e">AppendCertsFromPEM</span>(<span style="color:#a6e22e">rootCertPEM</span>)
+<pre><code>// create a pool of trusted certs
+certPool := x509.NewCertPool()
+certPool.AppendCertsFromPEM(rootCertPEM)
 
-<span style="color:#75715e">// configure a client to use trust those certificates
-</span><span style="color:#75715e"></span><span style="color:#a6e22e">client</span> <span style="color:#f92672">:=</span> <span style="color:#f92672">&amp;</span><span style="color:#a6e22e">http</span>.<span style="color:#a6e22e">Client</span>{
-	<span style="color:#a6e22e">Transport</span>: <span style="color:#f92672">&amp;</span><span style="color:#a6e22e">http</span>.<span style="color:#a6e22e">Transport</span>{
-		<span style="color:#a6e22e">TLSClientConfig</span>: <span style="color:#f92672">&amp;</span><span style="color:#a6e22e">tls</span>.<span style="color:#a6e22e">Config</span>{<span style="color:#a6e22e">RootCAs</span>: <span style="color:#a6e22e">certPool</span>},
+// configure a client to use trust those certificates
+client := &amp;http.Client{
+	Transport: &amp;http.Transport{
+		TLSClientConfig: &amp;tls.Config{RootCAs: certPool},
 	},
 }
-</code></pre></div><p>When the server provides a certificate, the client will now validate the signature using all the certificates in <code>certPool</code> rather than the ones on my laptop. Let's see if this worked.</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-go" data-lang="go"><span style="color:#a6e22e">s</span>.<span style="color:#a6e22e">StartTLS</span>()
-<span style="color:#a6e22e">resp</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">client</span>.<span style="color:#a6e22e">Get</span>(<span style="color:#a6e22e">s</span>.<span style="color:#a6e22e">URL</span>)
-<span style="color:#a6e22e">s</span>.<span style="color:#a6e22e">Close</span>()
-<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
-	<span style="color:#a6e22e">log</span>.<span style="color:#a6e22e">Fatalf</span>(<span style="color:#e6db74">&#34;could not make GET request: %v&#34;</span>, <span style="color:#a6e22e">err</span>)
+</code></pre><p>When the server provides a certificate, the client will now validate the signature using all the certificates in <code>certPool</code> rather than the ones on my laptop. Let's see if this worked.</p>
+<pre><code>s.StartTLS()
+resp, err := client.Get(s.URL)
+s.Close()
+if err != nil {
+	log.Fatalf(&quot;could not make GET request: %v&quot;, err)
 }
-<span style="color:#a6e22e">dump</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">httputil</span>.<span style="color:#a6e22e">DumpResponse</span>(<span style="color:#a6e22e">resp</span>, <span style="color:#66d9ef">true</span>)
-<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
-	<span style="color:#a6e22e">log</span>.<span style="color:#a6e22e">Fatalf</span>(<span style="color:#e6db74">&#34;could not dump response: %v&#34;</span>, <span style="color:#a6e22e">err</span>)
+dump, err := httputil.DumpResponse(resp, true)
+if err != nil {
+	log.Fatalf(&quot;could not dump response: %v&quot;, err)
 }
-<span style="color:#a6e22e">fmt</span>.<span style="color:#a6e22e">Printf</span>(<span style="color:#e6db74">&#34;%s\n&#34;</span>, <span style="color:#a6e22e">dump</span>)
-</code></pre></div><p>And boom, we're speaking HTTPS.</p>
+fmt.Printf(&quot;%s\n&quot;, dump)
+</code></pre><p>And boom, we're speaking HTTPS.</p>
 <pre><code class="language-nohighlight" data-lang="nohighlight">HTTP/1.1 200 OK
 Content-Length: 3
 Content-Type: text/plain; charset=utf-8
@@ -297,72 +298,72 @@ HI!
 <p>Most web servers don't care who the client is who's accessing them. Or at least the client authentication they do do isn't at the TCP layer, it's done with session tokens and HTTP middleware.</p>
 <p>While websites don't find this kind of auth particularly useful, databases and other architecture like a compute clusters, when a server wants to verify it's client without a password, can use this to both restrict access and encrypt communications. For instance, the is what <code>boot2docker</code> does in its more recent releases, while Google's <!-- raw HTML omitted -->Kubernetes platform<!-- raw HTML omitted --> has plans to use this for secure master to worker communication.</p>
 <p>It's easy to turn on client authentication for a Go server.</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-go" data-lang="go"><span style="color:#75715e">// create a new server which requires client authentication
-</span><span style="color:#75715e"></span><span style="color:#a6e22e">s</span> = <span style="color:#a6e22e">httptest</span>.<span style="color:#a6e22e">NewUnstartedServer</span>(<span style="color:#a6e22e">http</span>.<span style="color:#a6e22e">HandlerFunc</span>(<span style="color:#a6e22e">ok</span>))
-<span style="color:#a6e22e">s</span>.<span style="color:#a6e22e">TLS</span> = <span style="color:#f92672">&amp;</span><span style="color:#a6e22e">tls</span>.<span style="color:#a6e22e">Config</span>{
-	<span style="color:#a6e22e">Certificates</span>: []<span style="color:#a6e22e">tls</span>.<span style="color:#a6e22e">Certificate</span>{<span style="color:#a6e22e">servTLSCert</span>},
-	<span style="color:#a6e22e">ClientAuth</span>:   <span style="color:#a6e22e">tls</span>.<span style="color:#a6e22e">RequireAndVerifyClientCert</span>,
+<pre><code>// create a new server which requires client authentication
+s = httptest.NewUnstartedServer(http.HandlerFunc(ok))
+s.TLS = &amp;tls.Config{
+	Certificates: []tls.Certificate{servTLSCert},
+	ClientAuth:   tls.RequireAndVerifyClientCert,
 }
 
-<span style="color:#a6e22e">s</span>.<span style="color:#a6e22e">StartTLS</span>()
-<span style="color:#a6e22e">_</span>, <span style="color:#a6e22e">err</span> = <span style="color:#a6e22e">client</span>.<span style="color:#a6e22e">Get</span>(<span style="color:#a6e22e">s</span>.<span style="color:#a6e22e">URL</span>)
-<span style="color:#a6e22e">s</span>.<span style="color:#a6e22e">Close</span>()
-<span style="color:#a6e22e">fmt</span>.<span style="color:#a6e22e">Println</span>(<span style="color:#a6e22e">err</span>)
-</code></pre></div><p>After the request is made, we'll actually see the server log something like this. It's rejected the client.</p>
+s.StartTLS()
+_, err = client.Get(s.URL)
+s.Close()
+fmt.Println(err)
+</code></pre><p>After the request is made, we'll actually see the server log something like this. It's rejected the client.</p>
 <pre><code class="language-nohighlight" data-lang="nohighlight">http: TLS handshake error from 127.0.0.1:47038: tls: client didn't provide a certificate
 </code></pre><p>In order for the client to provide a certificate, we have to create a template first.</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-go" data-lang="go"><span style="color:#75715e">// create a key-pair for the client
-</span><span style="color:#75715e"></span><span style="color:#a6e22e">clientKey</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">rsa</span>.<span style="color:#a6e22e">GenerateKey</span>(<span style="color:#a6e22e">rand</span>.<span style="color:#a6e22e">Reader</span>, <span style="color:#ae81ff">2048</span>)
-<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
-	<span style="color:#a6e22e">log</span>.<span style="color:#a6e22e">Fatalf</span>(<span style="color:#e6db74">&#34;generating random key: %v&#34;</span>, <span style="color:#a6e22e">err</span>)
+<pre><code>// create a key-pair for the client
+clientKey, err := rsa.GenerateKey(rand.Reader, 2048)
+if err != nil {
+	log.Fatalf(&quot;generating random key: %v&quot;, err)
 }
 
-<span style="color:#75715e">// create a template for the client
-</span><span style="color:#75715e"></span><span style="color:#a6e22e">clientCertTmpl</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">CertTemplate</span>()
-<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
-	<span style="color:#a6e22e">log</span>.<span style="color:#a6e22e">Fatalf</span>(<span style="color:#e6db74">&#34;creating cert template: %v&#34;</span>, <span style="color:#a6e22e">err</span>)
+// create a template for the client
+clientCertTmpl, err := CertTemplate()
+if err != nil {
+	log.Fatalf(&quot;creating cert template: %v&quot;, err)
 }
-<span style="color:#a6e22e">clientCertTmpl</span>.<span style="color:#a6e22e">KeyUsage</span> = <span style="color:#a6e22e">x509</span>.<span style="color:#a6e22e">KeyUsageDigitalSignature</span>
-<span style="color:#a6e22e">clientCertTmpl</span>.<span style="color:#a6e22e">ExtKeyUsage</span> = []<span style="color:#a6e22e">x509</span>.<span style="color:#a6e22e">ExtKeyUsage</span>{<span style="color:#a6e22e">x509</span>.<span style="color:#a6e22e">ExtKeyUsageClientAuth</span>}
-</code></pre></div><p>When creating a new certificate we'll again have the <code>rootCert</code> sign it. It doesn't have to be the same parent as the server, but this makes the example easier.</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-go" data-lang="go"><span style="color:#75715e">// the root cert signs the cert by again providing its private key
-</span><span style="color:#75715e"></span><span style="color:#a6e22e">_</span>, <span style="color:#a6e22e">clientCertPEM</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">CreateCert</span>(<span style="color:#a6e22e">clientCertTmpl</span>, <span style="color:#a6e22e">rootCert</span>, <span style="color:#f92672">&amp;</span><span style="color:#a6e22e">clientKey</span>.<span style="color:#a6e22e">PublicKey</span>, <span style="color:#a6e22e">rootKey</span>)
-<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
-	<span style="color:#a6e22e">log</span>.<span style="color:#a6e22e">Fatalf</span>(<span style="color:#e6db74">&#34;error creating cert: %v&#34;</span>, <span style="color:#a6e22e">err</span>)
+clientCertTmpl.KeyUsage = x509.KeyUsageDigitalSignature
+clientCertTmpl.ExtKeyUsage = []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth}
+</code></pre><p>When creating a new certificate we'll again have the <code>rootCert</code> sign it. It doesn't have to be the same parent as the server, but this makes the example easier.</p>
+<pre><code>// the root cert signs the cert by again providing its private key
+_, clientCertPEM, err := CreateCert(clientCertTmpl, rootCert, &amp;clientKey.PublicKey, rootKey)
+if err != nil {
+	log.Fatalf(&quot;error creating cert: %v&quot;, err)
 }
 
-<span style="color:#75715e">// encode and load the cert and private key for the client
-</span><span style="color:#75715e"></span><span style="color:#a6e22e">clientKeyPEM</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">pem</span>.<span style="color:#a6e22e">EncodeToMemory</span>(<span style="color:#f92672">&amp;</span><span style="color:#a6e22e">pem</span>.<span style="color:#a6e22e">Block</span>{
-	<span style="color:#a6e22e">Type</span>: <span style="color:#e6db74">&#34;RSA PRIVATE KEY&#34;</span>, <span style="color:#a6e22e">Bytes</span>: <span style="color:#a6e22e">x509</span>.<span style="color:#a6e22e">MarshalPKCS1PrivateKey</span>(<span style="color:#a6e22e">clientKey</span>),
+// encode and load the cert and private key for the client
+clientKeyPEM := pem.EncodeToMemory(&amp;pem.Block{
+	Type: &quot;RSA PRIVATE KEY&quot;, Bytes: x509.MarshalPKCS1PrivateKey(clientKey),
 })
-<span style="color:#a6e22e">clientTLSCert</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">tls</span>.<span style="color:#a6e22e">X509KeyPair</span>(<span style="color:#a6e22e">clientCertPEM</span>, <span style="color:#a6e22e">clientKeyPEM</span>)
-<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
-	<span style="color:#a6e22e">log</span>.<span style="color:#a6e22e">Fatalf</span>(<span style="color:#e6db74">&#34;invalid key pair: %v&#34;</span>, <span style="color:#a6e22e">err</span>)
+clientTLSCert, err := tls.X509KeyPair(clientCertPEM, clientKeyPEM)
+if err != nil {
+	log.Fatalf(&quot;invalid key pair: %v&quot;, err)
 }
-</code></pre></div><p>The client now needs to trust the server's cert by trusting the cert pool we made earlier. As a reminder this holds the <code>rootCert</code>. It's also needs to present its own certificate.</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-go" data-lang="go"><span style="color:#a6e22e">authedClient</span> <span style="color:#f92672">:=</span> <span style="color:#f92672">&amp;</span><span style="color:#a6e22e">http</span>.<span style="color:#a6e22e">Client</span>{
-	<span style="color:#a6e22e">Transport</span>: <span style="color:#f92672">&amp;</span><span style="color:#a6e22e">http</span>.<span style="color:#a6e22e">Transport</span>{
-		<span style="color:#a6e22e">TLSClientConfig</span>: <span style="color:#f92672">&amp;</span><span style="color:#a6e22e">tls</span>.<span style="color:#a6e22e">Config</span>{
-			<span style="color:#a6e22e">RootCAs</span>:      <span style="color:#a6e22e">certPool</span>,
-			<span style="color:#a6e22e">Certificates</span>: []<span style="color:#a6e22e">tls</span>.<span style="color:#a6e22e">Certificate</span>{<span style="color:#a6e22e">clientTLSCert</span>},
+</code></pre><p>The client now needs to trust the server's cert by trusting the cert pool we made earlier. As a reminder this holds the <code>rootCert</code>. It's also needs to present its own certificate.</p>
+<pre><code>authedClient := &amp;http.Client{
+	Transport: &amp;http.Transport{
+		TLSClientConfig: &amp;tls.Config{
+			RootCAs:      certPool,
+			Certificates: []tls.Certificate{clientTLSCert},
 		},
 	},
 }
-</code></pre></div><p>Of course, the server still can't verify the client. If we made a request now, we'd see something like this.</p>
+</code></pre><p>Of course, the server still can't verify the client. If we made a request now, we'd see something like this.</p>
 <pre><code class="language-nohighlight" data-lang="nohighlight">http: TLS handshake error from 127.0.0.1:59756: tls: failed to verify client's certificate: x509: certificate signed by unknown authority
 </code></pre><p>To get around this, we have to configure a new test server to both present the server certificate, and trust the client's (by trusting <code>certPool</code> which holds <code>rootCert</code>).</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-go" data-lang="go"><span style="color:#a6e22e">s</span> = <span style="color:#a6e22e">httptest</span>.<span style="color:#a6e22e">NewUnstartedServer</span>(<span style="color:#a6e22e">http</span>.<span style="color:#a6e22e">HandlerFunc</span>(<span style="color:#a6e22e">ok</span>))
-<span style="color:#a6e22e">s</span>.<span style="color:#a6e22e">TLS</span> = <span style="color:#f92672">&amp;</span><span style="color:#a6e22e">tls</span>.<span style="color:#a6e22e">Config</span>{
-	<span style="color:#a6e22e">Certificates</span>: []<span style="color:#a6e22e">tls</span>.<span style="color:#a6e22e">Certificate</span>{<span style="color:#a6e22e">servTLSCert</span>},
-	<span style="color:#a6e22e">ClientAuth</span>:   <span style="color:#a6e22e">tls</span>.<span style="color:#a6e22e">RequireAndVerifyClientCert</span>,
-	<span style="color:#a6e22e">ClientCAs</span>:    <span style="color:#a6e22e">certPool</span>,
+<pre><code>s = httptest.NewUnstartedServer(http.HandlerFunc(ok))
+s.TLS = &amp;tls.Config{
+	Certificates: []tls.Certificate{servTLSCert},
+	ClientAuth:   tls.RequireAndVerifyClientCert,
+	ClientCAs:    certPool,
 }
-<span style="color:#a6e22e">s</span>.<span style="color:#a6e22e">StartTLS</span>()
-<span style="color:#a6e22e">_</span>, <span style="color:#a6e22e">err</span> = <span style="color:#a6e22e">authedClient</span>.<span style="color:#a6e22e">Get</span>(<span style="color:#a6e22e">s</span>.<span style="color:#a6e22e">URL</span>)
-<span style="color:#a6e22e">s</span>.<span style="color:#a6e22e">Close</span>()
-<span style="color:#a6e22e">fmt</span>.<span style="color:#a6e22e">Println</span>(<span style="color:#a6e22e">err</span>)
-<span style="color:#75715e">// &lt;nil&gt;
-</span></code></pre></div><p>And there you go, we've negotiated a secure conversation between a client and a server who both trust that each is properly authenticated.</p>
+s.StartTLS()
+_, err = authedClient.Get(s.URL)
+s.Close()
+fmt.Println(err)
+// &lt;nil&gt;
+</code></pre><p>And there you go, we've negotiated a secure conversation between a client and a server who both trust that each is properly authenticated.</p>
 
 </main>
 

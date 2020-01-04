@@ -44,55 +44,55 @@ if (!doNotTrack) {
 <h2 id="namespaces-for-everyone">Namespaces for everyone</h2>
 <p>User namespaces are a way to create unique views of user and group IDs. Unlike <a href="../containers-from-scratch/">other namespaces</a>, they can be created by non-root users and are primarily used by unprivileged processes to access capabilities normally reserved for root.</p>
 <p>The <code>unshare</code> tool can be used to create a user namespace and act as root:</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">$ whoami
+<pre><code>$ whoami
 ericchiang
 $ unshare --map-root-user
-<span style="color:#75715e"># whoami</span>
+# whoami
 root
-</code></pre></div><p>Under the hood, <code>unshare</code> is calling <a href="https://linux.die.net/man/2/unshare"><code>unshare(2)</code></a> and <code>fork(2)</code>, modifying the UID and GID mappings files under <code>/proc</code> , then exec’ing a shell:</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">$ unshare --map-root-user
-<span style="color:#75715e"># cat /proc/self/uid_map</span>
-         <span style="color:#ae81ff">0</span>       <span style="color:#ae81ff">1000</span>          <span style="color:#ae81ff">1</span>
-<span style="color:#75715e"># cat /proc/self/gid_map</span>
-         <span style="color:#ae81ff">0</span>       <span style="color:#ae81ff">1000</span>          <span style="color:#ae81ff">1</span>
-</code></pre></div><p>The map files are formatted as follows. In the case above, <code>0</code> (root) for the target ID, <code>1000</code> (my PID/GID) for the source ID, and <code>1</code> to only map a single UID and GID:</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell"><span style="color:#f92672">[</span>target ID<span style="color:#f92672">]</span> <span style="color:#f92672">[</span>source ID<span style="color:#f92672">]</span> <span style="color:#f92672">[</span>ID range<span style="color:#f92672">]</span>
-</code></pre></div><p>Within a user namespace, a process can run commands as if it was root. For example, an unprivileged user can call <code>chroot</code>:</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">$ <span style="color:#75715e"># create a root file system</span>
+</code></pre><p>Under the hood, <code>unshare</code> is calling <a href="https://linux.die.net/man/2/unshare"><code>unshare(2)</code></a> and <code>fork(2)</code>, modifying the UID and GID mappings files under <code>/proc</code> , then exec’ing a shell:</p>
+<pre><code>$ unshare --map-root-user
+# cat /proc/self/uid_map
+         0       1000          1
+# cat /proc/self/gid_map
+         0       1000          1
+</code></pre><p>The map files are formatted as follows. In the case above, <code>0</code> (root) for the target ID, <code>1000</code> (my PID/GID) for the source ID, and <code>1</code> to only map a single UID and GID:</p>
+<pre><code>[target ID] [source ID] [ID range]
+</code></pre><p>Within a user namespace, a process can run commands as if it was root. For example, an unprivileged user can call <code>chroot</code>:</p>
+<pre><code>$ # create a root file system
 $ mkdir rootfs
 $ sudo debootstrap stable rootfs http://deb.debian.org/debian/
 …
-$ unshare --map-root-user chroot rootfs <span style="color:#75715e"># run without sudo</span>
-<span style="color:#75715e"># ls /</span>
+$ unshare --map-root-user chroot rootfs # run without sudo
+# ls /
 bin  boot  dev  etc  home  lib  lib64  media  mnt
 opt  proc  root  run  sbin  srv  sys  tmp  usr  var
-</code></pre></div><p>Or setup other namespaces and mount filesystems:</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">$ <span style="color:#75715e"># create a user, mount, and PID namespace</span>
+</code></pre><p>Or setup other namespaces and mount filesystems:</p>
+<pre><code>$ # create a user, mount, and PID namespace
 $ unshare --map-root-user --mount --pid --fork
-<span style="color:#75715e"># mount -t proc proc $PWD/rootfs/proc</span>
-<span style="color:#75715e"># chroot rootfs</span>
-<span style="color:#75715e"># ps</span>
+# mount -t proc proc $PWD/rootfs/proc
+# chroot rootfs
+# ps
     PID TTY          TIME CMD
-      <span style="color:#ae81ff">1</span> ?        00:00:00 bash
-      <span style="color:#ae81ff">3</span> ?        00:00:00 ps
-</code></pre></div><p>But are we root? We certainly have a lot of capabilities:</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">$ unshare --map-root-user capsh --print
-Current: <span style="color:#f92672">=</span> cap_chown,cap_dac_override,cap_dac_read_search,cap_fowner,cap_fsetid,cap_kill,cap_setgid,cap_setuid,cap_setpcap,cap_linux_immutable,cap_net_bind_service,cap_net_broadcast,cap_net_admin,cap_net_raw,cap_ipc_lock,cap_ipc_owner,cap_sys_module,cap_sys_rawio,cap_sys_chroot,cap_sys_ptrace,cap_sys_pacct,cap_sys_admin,cap_sys_boot,cap_sys_nice,cap_sys_resource,cap_sys_time,cap_sys_tty_config,cap_mknod,cap_lease,cap_audit_write,cap_audit_control,cap_setfcap,cap_mac_override,cap_mac_admin,cap_syslog,cap_wake_alarm,cap_block_suspend,cap_audit_read+ep
-Bounding set <span style="color:#f92672">=</span>cap_chown,cap_dac_override,cap_dac_read_search,cap_fowner,cap_fsetid,cap_kill,cap_setgid,cap_setuid,cap_setpcap,cap_linux_immutable,cap_net_bind_service,cap_net_broadcast,cap_net_admin,cap_net_raw,cap_ipc_lock,cap_ipc_owner,cap_sys_module,cap_sys_rawio,cap_sys_chroot,cap_sys_ptrace,cap_sys_pacct,cap_sys_admin,cap_sys_boot,cap_sys_nice,cap_sys_resource,cap_sys_time,cap_sys_tty_config,cap_mknod,cap_lease,cap_audit_write,cap_audit_control,cap_setfcap,cap_mac_override,cap_mac_admin,cap_syslog,cap_wake_alarm,cap_block_suspend,cap_audit_read
-Securebits: 00/0x0/1<span style="color:#960050;background-color:#1e0010">&#39;</span>b0
- secure-noroot: no <span style="color:#f92672">(</span>unlocked<span style="color:#f92672">)</span>
- secure-no-suid-fixup: no <span style="color:#f92672">(</span>unlocked<span style="color:#f92672">)</span>
- secure-keep-caps: no <span style="color:#f92672">(</span>unlocked<span style="color:#f92672">)</span>
-uid<span style="color:#f92672">=</span>0<span style="color:#f92672">(</span>root<span style="color:#f92672">)</span>
-gid<span style="color:#f92672">=</span>0<span style="color:#f92672">(</span>root<span style="color:#f92672">)</span>
-groups<span style="color:#f92672">=</span>65534<span style="color:#f92672">(</span>nogroup<span style="color:#f92672">)</span>,65534<span style="color:#f92672">(</span>nogroup<span style="color:#f92672">)</span>,65534<span style="color:#f92672">(</span>nogroup<span style="color:#f92672">)</span>,0<span style="color:#f92672">(</span>root<span style="color:#f92672">)</span>
-</code></pre></div><p>The truth is, once the process attempts to interact with a resource outside of the namespace, “real root” restrictions apply. For example, the process can’t listen on a privileged port:</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">$ unshare --map-root-user nc -l -p <span style="color:#ae81ff">80</span>
-Can<span style="color:#960050;background-color:#1e0010">&#39;</span>t grab 0.0.0.0:80 with bind : Permission denied
-</code></pre></div><p>Or override host file permissions:</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">$ unshare --map-root-user cat /etc/shadow
+      1 ?        00:00:00 bash
+      3 ?        00:00:00 ps
+</code></pre><p>But are we root? We certainly have a lot of capabilities:</p>
+<pre><code>$ unshare --map-root-user capsh --print
+Current: = cap_chown,cap_dac_override,cap_dac_read_search,cap_fowner,cap_fsetid,cap_kill,cap_setgid,cap_setuid,cap_setpcap,cap_linux_immutable,cap_net_bind_service,cap_net_broadcast,cap_net_admin,cap_net_raw,cap_ipc_lock,cap_ipc_owner,cap_sys_module,cap_sys_rawio,cap_sys_chroot,cap_sys_ptrace,cap_sys_pacct,cap_sys_admin,cap_sys_boot,cap_sys_nice,cap_sys_resource,cap_sys_time,cap_sys_tty_config,cap_mknod,cap_lease,cap_audit_write,cap_audit_control,cap_setfcap,cap_mac_override,cap_mac_admin,cap_syslog,cap_wake_alarm,cap_block_suspend,cap_audit_read+ep
+Bounding set =cap_chown,cap_dac_override,cap_dac_read_search,cap_fowner,cap_fsetid,cap_kill,cap_setgid,cap_setuid,cap_setpcap,cap_linux_immutable,cap_net_bind_service,cap_net_broadcast,cap_net_admin,cap_net_raw,cap_ipc_lock,cap_ipc_owner,cap_sys_module,cap_sys_rawio,cap_sys_chroot,cap_sys_ptrace,cap_sys_pacct,cap_sys_admin,cap_sys_boot,cap_sys_nice,cap_sys_resource,cap_sys_time,cap_sys_tty_config,cap_mknod,cap_lease,cap_audit_write,cap_audit_control,cap_setfcap,cap_mac_override,cap_mac_admin,cap_syslog,cap_wake_alarm,cap_block_suspend,cap_audit_read
+Securebits: 00/0x0/1'b0
+ secure-noroot: no (unlocked)
+ secure-no-suid-fixup: no (unlocked)
+ secure-keep-caps: no (unlocked)
+uid=0(root)
+gid=0(root)
+groups=65534(nogroup),65534(nogroup),65534(nogroup),0(root)
+</code></pre><p>The truth is, once the process attempts to interact with a resource outside of the namespace, “real root” restrictions apply. For example, the process can’t listen on a privileged port:</p>
+<pre><code>$ unshare --map-root-user nc -l -p 80
+Can't grab 0.0.0.0:80 with bind : Permission denied
+</code></pre><p>Or override host file permissions:</p>
+<pre><code>$ unshare --map-root-user cat /etc/shadow
 cat: /etc/shadow: Permission denied
-</code></pre></div><p>Ultimately, the process is only root in the namespace and host restrictions still apply as if it was running as a normal user.</p>
+</code></pre><p>Ultimately, the process is only root in the namespace and host restrictions still apply as if it was running as a normal user.</p>
 <h2 id="use-in-practice">Use in practice</h2>
 <p>In practice, user namespaces are largely used for unprivileged management of namespaces.</p>
 <p><a href="https://flatpak.org/">Flatpak</a>, a tool for running containerized desktop applications, allows unprivileged users to run containers by leveraging user namespaces to create the application’s sandbox. Flatpak’s runtime <a href="https://github.com/projectatomic/bubblewrap">bubblewrap</a> is also used by projects like GNOME Desktop to isolate risky processes.</p>

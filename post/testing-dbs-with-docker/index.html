@@ -53,119 +53,119 @@ if (!doNotTrack) {
 <p>I work at a company that has a Go project that uses Postgres. How do you test database code? Maybe you can convince all of your employees to install Postgres with the exact same configuration. Maybe you could use SQLite to reduce dev setup times (never do this).</p>
 <p>Of course with the awesomeness of Linux containers you just need to use Docker!</p>
 <p>The workflow we're looking for: for each test, start a fresh instance of Postgres in a Docker container, then run the tests using it.</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-go" data-lang="go"><span style="color:#a6e22e">dockerContainer</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">NewPostgresDB</span>()
-<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
-	<span style="color:#75715e">// handle error
-</span><span style="color:#75715e"></span>}
-<span style="color:#66d9ef">defer</span> <span style="color:#a6e22e">destroy</span>(<span style="color:#a6e22e">dockerContainer</span>)
-
-<span style="color:#75715e">// run test
-</span></code></pre></div><p>For our code, the Postgres struct will look like this. There's only two bits of information that it'll hold, the port the container is running on and the ID of the container.</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-go" data-lang="go"><span style="color:#66d9ef">type</span> <span style="color:#a6e22e">PostgresDB</span> <span style="color:#66d9ef">struct</span> {
-	<span style="color:#75715e">// Of form &#39;host:port&#39;
-</span><span style="color:#75715e"></span>	<span style="color:#a6e22e">Host</span> <span style="color:#66d9ef">string</span>
-
-	<span style="color:#75715e">// The container id assigned by docker
-</span><span style="color:#75715e"></span>	<span style="color:#a6e22e">cid</span> <span style="color:#66d9ef">string</span>
+<pre><code>dockerContainer, err := NewPostgresDB()
+if err != nil {
+	// handle error
 }
-</code></pre></div><h2 id="postgres-docker-images">Postgres&rsquo; Docker images</h2>
+defer destroy(dockerContainer)
+
+// run test
+</code></pre><p>For our code, the Postgres struct will look like this. There's only two bits of information that it'll hold, the port the container is running on and the ID of the container.</p>
+<pre><code>type PostgresDB struct {
+	// Of form 'host:port'
+	Host string
+
+	// The container id assigned by docker
+	cid string
+}
+</code></pre><h2 id="postgres-docker-images">Postgres&rsquo; Docker images</h2>
 <p>Postgres has an <a href="https://hub.docker.com/_/postgres/">official image</a> through Docker Hub. Most databases do.</p>
 <p>Starting a container is easy using Docker and will look something like the following.</p>
-<pre><code class="language-nohighlight" data-lang="nohighlight">docker run -d -p $HOSTPORT:5432 -e POSTGRES_PASSWORD=$PASS postgres:$VERSION
+<pre><code>docker run -d -p $HOSTPORT:5432 -e POSTGRES_PASSWORD=$PASS postgres:$VERSION
 </code></pre><p>The <code>-p</code> flag requests an exposed port and, because Postgres runs on port <code>5432</code>, we need to map <code>5432</code> to the host machine. <code>-d</code> indicates &ldquo;detached mode,&rdquo; and <code>-e</code> is used to specify environment variables.</p>
 <p>The actual image allows for a bit of configuration through the env. This will be another struct.</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-go" data-lang="go"><span style="color:#66d9ef">type</span> <span style="color:#a6e22e">PostgresConfig</span> <span style="color:#66d9ef">struct</span> {
-	<span style="color:#a6e22e">Password</span> <span style="color:#66d9ef">string</span>
-	<span style="color:#a6e22e">Username</span> <span style="color:#66d9ef">string</span> <span style="color:#75715e">// defaults to &#34;postgres&#34;
-</span><span style="color:#75715e"></span>	<span style="color:#a6e22e">Database</span> <span style="color:#66d9ef">string</span> <span style="color:#75715e">// defaults to &#34;username&#34;
-</span><span style="color:#75715e"></span>	<span style="color:#a6e22e">Version</span>  <span style="color:#66d9ef">string</span> <span style="color:#75715e">// defaults to &#34;latest&#34;
-</span><span style="color:#75715e"></span>}
-</code></pre></div><p>To create an instance of Postgres, we'll determine Docker's command line arguments given a config. Then run the Docker command through Go's <code>os/exec</code> library.</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-go" data-lang="go"><span style="color:#66d9ef">func</span> <span style="color:#a6e22e">NewPostgresDB</span>(<span style="color:#a6e22e">c</span> <span style="color:#a6e22e">PostgresConfig</span>) (<span style="color:#f92672">*</span><span style="color:#a6e22e">PostgresDB</span>, <span style="color:#66d9ef">error</span>) {
-	<span style="color:#a6e22e">img</span> <span style="color:#f92672">:=</span> <span style="color:#e6db74">&#34;postgres:latest&#34;</span>
-	<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">c</span>.<span style="color:#a6e22e">Version</span> <span style="color:#f92672">==</span> <span style="color:#e6db74">&#34;&#34;</span> {
-		<span style="color:#a6e22e">img</span> = <span style="color:#e6db74">&#34;postgres:&#34;</span> <span style="color:#f92672">+</span> <span style="color:#a6e22e">c</span>.<span style="color:#a6e22e">Version</span>
+<pre><code>type PostgresConfig struct {
+	Password string
+	Username string // defaults to &quot;postgres&quot;
+	Database string // defaults to &quot;username&quot;
+	Version  string // defaults to &quot;latest&quot;
+}
+</code></pre><p>To create an instance of Postgres, we'll determine Docker's command line arguments given a config. Then run the Docker command through Go's <code>os/exec</code> library.</p>
+<pre><code>func NewPostgresDB(c PostgresConfig) (*PostgresDB, error) {
+	img := &quot;postgres:latest&quot;
+	if c.Version == &quot;&quot; {
+		img = &quot;postgres:&quot; + c.Version
 	}
 
-	<span style="color:#75715e">// docker&#39;s run command has the nasty habbit of pulling images if you don&#39;t have them.
-</span><span style="color:#75715e"></span>	<span style="color:#75715e">// Warn user they need to pull the image, don&#39;t automatically pull for them.
-</span><span style="color:#75715e"></span>	<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">exec</span>.<span style="color:#a6e22e">Command</span>(<span style="color:#e6db74">&#34;docker&#34;</span>, <span style="color:#e6db74">&#34;inspect&#34;</span>, <span style="color:#a6e22e">img</span>).<span style="color:#a6e22e">Run</span>() <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
-		<span style="color:#66d9ef">return</span> <span style="color:#66d9ef">nil</span>, <span style="color:#a6e22e">fmt</span>.<span style="color:#a6e22e">Errorf</span>(<span style="color:#e6db74">&#34;db requires docker image %s, please pull or specify a different version&#34;</span>, <span style="color:#a6e22e">img</span>)
+	// docker's run command has the nasty habbit of pulling images if you don't have them.
+	// Warn user they need to pull the image, don't automatically pull for them.
+	if exec.Command(&quot;docker&quot;, &quot;inspect&quot;, img).Run() != nil {
+		return nil, fmt.Errorf(&quot;db requires docker image %s, please pull or specify a different version&quot;, img)
 	}
 
-	<span style="color:#75715e">// Running on port 0 instructs the operating system to pick an available port.
-</span><span style="color:#75715e"></span>	<span style="color:#a6e22e">dockerArgs</span> <span style="color:#f92672">:=</span> []<span style="color:#66d9ef">string</span>{<span style="color:#e6db74">&#34;run&#34;</span>, <span style="color:#e6db74">&#34;-d&#34;</span>, <span style="color:#e6db74">&#34;-p&#34;</span>, <span style="color:#e6db74">&#34;127.0.0.1:0:5432&#34;</span>}
-	<span style="color:#a6e22e">envvars</span> <span style="color:#f92672">:=</span> <span style="color:#66d9ef">map</span>[<span style="color:#66d9ef">string</span>]<span style="color:#66d9ef">string</span>{
-		<span style="color:#e6db74">&#34;POSTGRES_PASSWORD&#34;</span>: <span style="color:#a6e22e">c</span>.<span style="color:#a6e22e">Password</span>,
-		<span style="color:#e6db74">&#34;POSTGRES_USER&#34;</span>:     <span style="color:#a6e22e">c</span>.<span style="color:#a6e22e">Username</span>,
-		<span style="color:#e6db74">&#34;POSTGRES_DB&#34;</span>:       <span style="color:#a6e22e">c</span>.<span style="color:#a6e22e">Database</span>,
+	// Running on port 0 instructs the operating system to pick an available port.
+	dockerArgs := []string{&quot;run&quot;, &quot;-d&quot;, &quot;-p&quot;, &quot;127.0.0.1:0:5432&quot;}
+	envvars := map[string]string{
+		&quot;POSTGRES_PASSWORD&quot;: c.Password,
+		&quot;POSTGRES_USER&quot;:     c.Username,
+		&quot;POSTGRES_DB&quot;:       c.Database,
 	}
-	<span style="color:#66d9ef">for</span> <span style="color:#a6e22e">key</span>, <span style="color:#a6e22e">val</span> <span style="color:#f92672">:=</span> <span style="color:#66d9ef">range</span> <span style="color:#a6e22e">envvars</span> {
-		<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">val</span> <span style="color:#f92672">!=</span> <span style="color:#e6db74">&#34;&#34;</span> {
-			<span style="color:#a6e22e">dockerArgs</span> = append(<span style="color:#a6e22e">dockerArgs</span>, <span style="color:#e6db74">&#34;-e&#34;</span>, <span style="color:#a6e22e">key</span><span style="color:#f92672">+</span><span style="color:#e6db74">&#34;=&#34;</span><span style="color:#f92672">+</span><span style="color:#a6e22e">val</span>)
+	for key, val := range envvars {
+		if val != &quot;&quot; {
+			dockerArgs = append(dockerArgs, &quot;-e&quot;, key+&quot;=&quot;+val)
 		}
 	}
-	<span style="color:#a6e22e">dockerArgs</span> = append(<span style="color:#a6e22e">dockerArgs</span>, <span style="color:#a6e22e">img</span>)
+	dockerArgs = append(dockerArgs, img)
 
-	<span style="color:#75715e">// Start the docker container.
-</span><span style="color:#75715e"></span>	<span style="color:#a6e22e">out</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">exec</span>.<span style="color:#a6e22e">Command</span>(<span style="color:#e6db74">&#34;docker&#34;</span>, <span style="color:#a6e22e">dockerArgs</span><span style="color:#f92672">...</span>).<span style="color:#a6e22e">CombinedOutput</span>()
-	<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
-		<span style="color:#66d9ef">return</span> <span style="color:#66d9ef">nil</span>, <span style="color:#a6e22e">fmt</span>.<span style="color:#a6e22e">Errorf</span>(<span style="color:#e6db74">&#34;docker run: %v: %s&#34;</span>, <span style="color:#a6e22e">err</span>, <span style="color:#a6e22e">out</span>)
+	// Start the docker container.
+	out, err := exec.Command(&quot;docker&quot;, dockerArgs...).CombinedOutput()
+	if err != nil {
+		return nil, fmt.Errorf(&quot;docker run: %v: %s&quot;, err, out)
 	}
-	<span style="color:#a6e22e">cid</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">strings</span>.<span style="color:#a6e22e">TrimSpace</span>(string(<span style="color:#a6e22e">out</span>))
-	<span style="color:#a6e22e">db</span> <span style="color:#f92672">:=</span> <span style="color:#f92672">&amp;</span><span style="color:#a6e22e">PostgresDB</span>{<span style="color:#a6e22e">cid</span>: <span style="color:#a6e22e">cid</span>}
+	cid := strings.TrimSpace(string(out))
+	db := &amp;PostgresDB{cid: cid}
 
-	<span style="color:#a6e22e">db</span>.<span style="color:#a6e22e">Host</span>, <span style="color:#a6e22e">err</span> = <span style="color:#a6e22e">portMapping</span>(<span style="color:#a6e22e">cid</span>, <span style="color:#e6db74">&#34;5432/tcp&#34;</span>)
-	<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
-		<span style="color:#a6e22e">db</span>.<span style="color:#a6e22e">Close</span>()
-		<span style="color:#66d9ef">return</span> <span style="color:#66d9ef">nil</span>, <span style="color:#a6e22e">err</span>
+	db.Host, err = portMapping(cid, &quot;5432/tcp&quot;)
+	if err != nil {
+		db.Close()
+		return nil, err
 	}
-	<span style="color:#66d9ef">return</span> <span style="color:#a6e22e">db</span>, <span style="color:#66d9ef">nil</span>
+	return db, nil
 }
-</code></pre></div><p>The host address specified above is <code>127.0.0.1:0</code>. Port 0 is a way of telling the operating system to pick any available port. For testing it's nice to not hard code an explicit port in case the person running the tests has a conflicting service (like an actually Postgres database).</p>
+</code></pre><p>The host address specified above is <code>127.0.0.1:0</code>. Port 0 is a way of telling the operating system to pick any available port. For testing it's nice to not hard code an explicit port in case the person running the tests has a conflicting service (like an actually Postgres database).</p>
 <p><code>docker inspect</code> allows us figure out what port the operating system chose. This returns a giant JSON object with, among other things, network settings for the running container.</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-go" data-lang="go"><span style="color:#66d9ef">func</span> <span style="color:#a6e22e">portMapping</span>(<span style="color:#a6e22e">cid</span>, <span style="color:#a6e22e">containerPort</span> <span style="color:#66d9ef">string</span>) (<span style="color:#a6e22e">hostAddr</span> <span style="color:#66d9ef">string</span>, <span style="color:#a6e22e">err</span> <span style="color:#66d9ef">error</span>) {
-	<span style="color:#a6e22e">out</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">exec</span>.<span style="color:#a6e22e">Command</span>(<span style="color:#e6db74">&#34;docker&#34;</span>, <span style="color:#e6db74">&#34;inspect&#34;</span>, <span style="color:#a6e22e">cid</span>).<span style="color:#a6e22e">CombinedOutput</span>()
-	<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
-		<span style="color:#66d9ef">return</span> <span style="color:#e6db74">&#34;&#34;</span>, <span style="color:#a6e22e">fmt</span>.<span style="color:#a6e22e">Errorf</span>(<span style="color:#e6db74">&#34;docker inspect: %v: %s&#34;</span>, <span style="color:#a6e22e">err</span>, <span style="color:#a6e22e">out</span>)
+<pre><code>func portMapping(cid, containerPort string) (hostAddr string, err error) {
+	out, err := exec.Command(&quot;docker&quot;, &quot;inspect&quot;, cid).CombinedOutput()
+	if err != nil {
+		return &quot;&quot;, fmt.Errorf(&quot;docker inspect: %v: %s&quot;, err, out)
 	}
 
-	<span style="color:#75715e">// anonymous struct for unmarshalling JSON into
-</span><span style="color:#75715e"></span>	<span style="color:#66d9ef">var</span> <span style="color:#a6e22e">inspectResp</span> []<span style="color:#66d9ef">struct</span> {
-		<span style="color:#a6e22e">NetworkSettings</span> <span style="color:#66d9ef">struct</span> {
-			<span style="color:#a6e22e">Ports</span> <span style="color:#66d9ef">map</span>[<span style="color:#66d9ef">string</span>][]<span style="color:#66d9ef">struct</span> {
-				<span style="color:#a6e22e">HostIp</span>   <span style="color:#66d9ef">string</span>
-				<span style="color:#a6e22e">HostPort</span> <span style="color:#66d9ef">string</span>
+	// anonymous struct for unmarshalling JSON into
+	var inspectResp []struct {
+		NetworkSettings struct {
+			Ports map[string][]struct {
+				HostIp   string
+				HostPort string
 			}
 		}
 	}
-	<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">json</span>.<span style="color:#a6e22e">Unmarshal</span>(<span style="color:#a6e22e">out</span>, <span style="color:#f92672">&amp;</span><span style="color:#a6e22e">inspectResp</span>); <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
-		<span style="color:#66d9ef">return</span> <span style="color:#e6db74">&#34;&#34;</span>, <span style="color:#a6e22e">fmt</span>.<span style="color:#a6e22e">Errorf</span>(<span style="color:#e6db74">&#34;decoding docker inspect result failed: %v: %s&#34;</span>, <span style="color:#a6e22e">err</span>, <span style="color:#a6e22e">out</span>)
+	if err := json.Unmarshal(out, &amp;inspectResp); err != nil {
+		return &quot;&quot;, fmt.Errorf(&quot;decoding docker inspect result failed: %v: %s&quot;, err, out)
 	}
-	<span style="color:#66d9ef">if</span> len(<span style="color:#a6e22e">inspectResp</span>) <span style="color:#f92672">!=</span> <span style="color:#ae81ff">1</span> {
-		<span style="color:#66d9ef">return</span> <span style="color:#e6db74">&#34;&#34;</span>, <span style="color:#a6e22e">fmt</span>.<span style="color:#a6e22e">Errorf</span>(<span style="color:#e6db74">&#34;expected one inspect result, got %d&#34;</span>, len(<span style="color:#a6e22e">inspectResp</span>))
+	if len(inspectResp) != 1 {
+		return &quot;&quot;, fmt.Errorf(&quot;expected one inspect result, got %d&quot;, len(inspectResp))
 	}
-	<span style="color:#a6e22e">ports</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">inspectResp</span>[<span style="color:#ae81ff">0</span>].<span style="color:#a6e22e">NetworkSettings</span>.<span style="color:#a6e22e">Ports</span>[<span style="color:#a6e22e">containerPort</span>]
-	<span style="color:#66d9ef">if</span> len(<span style="color:#a6e22e">ports</span>) <span style="color:#f92672">!=</span> <span style="color:#ae81ff">1</span> {
-		<span style="color:#66d9ef">return</span> <span style="color:#e6db74">&#34;&#34;</span>, <span style="color:#a6e22e">fmt</span>.<span style="color:#a6e22e">Errorf</span>(<span style="color:#e6db74">&#34;expected one port mapping, got %d&#34;</span>, len(<span style="color:#a6e22e">ports</span>))
+	ports := inspectResp[0].NetworkSettings.Ports[containerPort]
+	if len(ports) != 1 {
+		return &quot;&quot;, fmt.Errorf(&quot;expected one port mapping, got %d&quot;, len(ports))
 	}
-	<span style="color:#66d9ef">return</span> <span style="color:#a6e22e">ports</span>[<span style="color:#ae81ff">0</span>].<span style="color:#a6e22e">HostIp</span> <span style="color:#f92672">+</span> <span style="color:#e6db74">&#34;:&#34;</span> <span style="color:#f92672">+</span> <span style="color:#a6e22e">ports</span>[<span style="color:#ae81ff">0</span>].<span style="color:#a6e22e">HostPort</span>, <span style="color:#66d9ef">nil</span>
+	return ports[0].HostIp + &quot;:&quot; + ports[0].HostPort, nil
 }
-</code></pre></div><p>Finally, closing the database should result in the entire container being removed. Again, we'll just use <code>os/exec</code> to call Docker.</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-go" data-lang="go"><span style="color:#75715e">// Close removes the container running the postgres database.
-</span><span style="color:#75715e"></span><span style="color:#66d9ef">func</span> (<span style="color:#a6e22e">db</span> <span style="color:#f92672">*</span><span style="color:#a6e22e">PostgresDB</span>) <span style="color:#a6e22e">Close</span>() <span style="color:#66d9ef">error</span> {
-	<span style="color:#a6e22e">out</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">exec</span>.<span style="color:#a6e22e">Command</span>(<span style="color:#e6db74">&#34;docker&#34;</span>, <span style="color:#e6db74">&#34;rm&#34;</span>, <span style="color:#e6db74">&#34;-f&#34;</span>, <span style="color:#a6e22e">db</span>.<span style="color:#a6e22e">cid</span>).<span style="color:#a6e22e">CombinedOutput</span>()
-	<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
-		<span style="color:#66d9ef">return</span> <span style="color:#a6e22e">fmt</span>.<span style="color:#a6e22e">Errorf</span>(<span style="color:#e6db74">&#34;docker rm: %v: %s&#34;</span>, <span style="color:#a6e22e">err</span>, <span style="color:#a6e22e">out</span>)
+</code></pre><p>Finally, closing the database should result in the entire container being removed. Again, we'll just use <code>os/exec</code> to call Docker.</p>
+<pre><code>// Close removes the container running the postgres database.
+func (db *PostgresDB) Close() error {
+	out, err := exec.Command(&quot;docker&quot;, &quot;rm&quot;, &quot;-f&quot;, db.cid).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf(&quot;docker rm: %v: %s&quot;, err, out)
 	}
-	<span style="color:#66d9ef">return</span> <span style="color:#66d9ef">nil</span>
+	return nil
 }
-</code></pre></div><h2 id="writing-a-test-helper">Writing a test helper</h2>
+</code></pre><h2 id="writing-a-test-helper">Writing a test helper</h2>
 <p>Go tests always have a signature like this:</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-go" data-lang="go"><span style="color:#66d9ef">func</span> <span style="color:#a6e22e">TestXyz</span>(<span style="color:#a6e22e">t</span> <span style="color:#f92672">*</span><span style="color:#a6e22e">testing</span>.<span style="color:#a6e22e">T</span>)
-</code></pre></div><p>We want to write tests that take a database connection as well. Something that looks like this:</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-go" data-lang="go"><span style="color:#66d9ef">type</span> <span style="color:#a6e22e">DBTest</span> <span style="color:#66d9ef">func</span>(<span style="color:#a6e22e">t</span> <span style="color:#f92672">*</span><span style="color:#a6e22e">testing</span>.<span style="color:#a6e22e">T</span>, <span style="color:#a6e22e">conn</span> <span style="color:#f92672">*</span><span style="color:#a6e22e">sql</span>.<span style="color:#a6e22e">DB</span>)
-</code></pre></div><p>So let's write a function to run a <code>DBTest</code>. This steps will be</p>
+<pre><code>func TestXyz(t *testing.T)
+</code></pre><p>We want to write tests that take a database connection as well. Something that looks like this:</p>
+<pre><code>type DBTest func(t *testing.T, conn *sql.DB)
+</code></pre><p>So let's write a function to run a <code>DBTest</code>. This steps will be</p>
 <ol>
 <li>Create a container</li>
 <li>Connect to the container</li>
@@ -173,108 +173,108 @@ if (!doNotTrack) {
 <li>Clean up the container</li>
 </ol>
 <p>Importing the <a href="https://github.com/lib/pq"><code>github.com/lib/pq</code></a> driver is enough to connect to the container. While the code we used before will create and clean up a new instance of Postgres for each test.</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-go" data-lang="go"><span style="color:#f92672">import</span> (
-	<span style="color:#75715e">// other imports
-</span><span style="color:#75715e"></span>
-	<span style="color:#a6e22e">_</span> <span style="color:#e6db74">&#34;github.com/lib/pq&#34;</span> <span style="color:#75715e">// &#34;empty import&#34; to register driver with database/sql
-</span><span style="color:#75715e"></span>)
+<pre><code>import (
+	// other imports
 
-<span style="color:#66d9ef">type</span> <span style="color:#a6e22e">DBTest</span> <span style="color:#66d9ef">func</span>(<span style="color:#a6e22e">t</span> <span style="color:#f92672">*</span><span style="color:#a6e22e">testing</span>.<span style="color:#a6e22e">T</span>, <span style="color:#a6e22e">conn</span> <span style="color:#f92672">*</span><span style="color:#a6e22e">sql</span>.<span style="color:#a6e22e">DB</span>)
+	_ &quot;github.com/lib/pq&quot; // &quot;empty import&quot; to register driver with database/sql
+)
 
-<span style="color:#66d9ef">func</span> <span style="color:#a6e22e">RunDBTest</span>(<span style="color:#a6e22e">t</span> <span style="color:#f92672">*</span><span style="color:#a6e22e">testing</span>.<span style="color:#a6e22e">T</span>, <span style="color:#a6e22e">dbVersion</span> <span style="color:#66d9ef">string</span>, <span style="color:#a6e22e">test</span> <span style="color:#a6e22e">DBTest</span>) {
-	<span style="color:#a6e22e">c</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">PostgresConfig</span>{<span style="color:#e6db74">&#34;pass&#34;</span>, <span style="color:#e6db74">&#34;eric&#34;</span>, <span style="color:#e6db74">&#34;postgrestest&#34;</span>, <span style="color:#a6e22e">dbVersion</span>}
+type DBTest func(t *testing.T, conn *sql.DB)
 
-	<span style="color:#75715e">// create a postgres container
-</span><span style="color:#75715e"></span>	<span style="color:#a6e22e">db</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">NewPostgresDB</span>(<span style="color:#a6e22e">c</span>)
-	<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
-		<span style="color:#a6e22e">t</span>.<span style="color:#a6e22e">Fatal</span>(<span style="color:#a6e22e">err</span>)
+func RunDBTest(t *testing.T, dbVersion string, test DBTest) {
+	c := PostgresConfig{&quot;pass&quot;, &quot;eric&quot;, &quot;postgrestest&quot;, dbVersion}
+
+	// create a postgres container
+	db, err := NewPostgresDB(c)
+	if err != nil {
+		t.Fatal(err)
 	}
-	<span style="color:#66d9ef">defer</span> <span style="color:#a6e22e">db</span>.<span style="color:#a6e22e">Close</span>() <span style="color:#75715e">// destroy the postgres container after the test
-</span><span style="color:#75715e"></span>
-	<span style="color:#75715e">// create a connection URL
-</span><span style="color:#75715e"></span>	<span style="color:#75715e">// http://www.postgresql.org/docs/current/static/libpq-connect.html#LIBPQ-CONNSTRING
-</span><span style="color:#75715e"></span>	<span style="color:#a6e22e">connURL</span> <span style="color:#f92672">:=</span> <span style="color:#f92672">&amp;</span><span style="color:#a6e22e">url</span>.<span style="color:#a6e22e">URL</span>{
-		<span style="color:#a6e22e">Scheme</span>:   <span style="color:#e6db74">&#34;postgres&#34;</span>,
-		<span style="color:#a6e22e">User</span>:     <span style="color:#a6e22e">url</span>.<span style="color:#a6e22e">UserPassword</span>(<span style="color:#a6e22e">c</span>.<span style="color:#a6e22e">Username</span>, <span style="color:#a6e22e">c</span>.<span style="color:#a6e22e">Password</span>),
-		<span style="color:#a6e22e">Host</span>:     <span style="color:#a6e22e">db</span>.<span style="color:#a6e22e">Host</span>,
-		<span style="color:#a6e22e">Path</span>:     <span style="color:#e6db74">&#34;/&#34;</span> <span style="color:#f92672">+</span> <span style="color:#a6e22e">c</span>.<span style="color:#a6e22e">Database</span>,
-		<span style="color:#a6e22e">RawQuery</span>: <span style="color:#e6db74">&#34;sslmode=disable&#34;</span>,
+	defer db.Close() // destroy the postgres container after the test
+
+	// create a connection URL
+	// http://www.postgresql.org/docs/current/static/libpq-connect.html#LIBPQ-CONNSTRING
+	connURL := &amp;url.URL{
+		Scheme:   &quot;postgres&quot;,
+		User:     url.UserPassword(c.Username, c.Password),
+		Host:     db.Host,
+		Path:     &quot;/&quot; + c.Database,
+		RawQuery: &quot;sslmode=disable&quot;,
 	}
 
-	<span style="color:#75715e">// connect to database
-</span><span style="color:#75715e"></span>	<span style="color:#a6e22e">conn</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">sql</span>.<span style="color:#a6e22e">Open</span>(<span style="color:#e6db74">&#34;postgres&#34;</span>, <span style="color:#a6e22e">connURL</span>.<span style="color:#a6e22e">String</span>())
-	<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
-		<span style="color:#a6e22e">t</span>.<span style="color:#a6e22e">Error</span>(<span style="color:#a6e22e">err</span>)
-		<span style="color:#66d9ef">return</span>
+	// connect to database
+	conn, err := sql.Open(&quot;postgres&quot;, connURL.String())
+	if err != nil {
+		t.Error(err)
+		return
 	}
-	<span style="color:#66d9ef">defer</span> <span style="color:#a6e22e">conn</span>.<span style="color:#a6e22e">Close</span>()
+	defer conn.Close()
 
-	<span style="color:#75715e">// ping the database until it comes up
-</span><span style="color:#75715e"></span>	<span style="color:#a6e22e">timeout</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">time</span>.<span style="color:#a6e22e">Now</span>().<span style="color:#a6e22e">Add</span>(<span style="color:#a6e22e">time</span>.<span style="color:#a6e22e">Second</span> <span style="color:#f92672">*</span> <span style="color:#ae81ff">20</span>)
-	<span style="color:#66d9ef">for</span> <span style="color:#a6e22e">time</span>.<span style="color:#a6e22e">Now</span>().<span style="color:#a6e22e">Before</span>(<span style="color:#a6e22e">timeout</span>) {
-		<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> = <span style="color:#a6e22e">conn</span>.<span style="color:#a6e22e">Ping</span>(); <span style="color:#a6e22e">err</span> <span style="color:#f92672">==</span> <span style="color:#66d9ef">nil</span> {
-			<span style="color:#75715e">// yay! we&#39;ve connected to the database, time to run the test
-</span><span style="color:#75715e"></span>			<span style="color:#a6e22e">test</span>(<span style="color:#a6e22e">t</span>, <span style="color:#a6e22e">conn</span>)
-			<span style="color:#66d9ef">return</span>
+	// ping the database until it comes up
+	timeout := time.Now().Add(time.Second * 20)
+	for time.Now().Before(timeout) {
+		if err = conn.Ping(); err == nil {
+			// yay! we've connected to the database, time to run the test
+			test(t, conn)
+			return
 		}
-		<span style="color:#a6e22e">time</span>.<span style="color:#a6e22e">Sleep</span>(<span style="color:#ae81ff">100</span> <span style="color:#f92672">*</span> <span style="color:#a6e22e">time</span>.<span style="color:#a6e22e">Millisecond</span>)
+		time.Sleep(100 * time.Millisecond)
 	}
-	<span style="color:#a6e22e">t</span>.<span style="color:#a6e22e">Errorf</span>(<span style="color:#e6db74">&#34;failed to connect to database: %v&#34;</span>, <span style="color:#a6e22e">err</span>)
+	t.Errorf(&quot;failed to connect to database: %v&quot;, err)
 }
-</code></pre></div><h2 id="time-to-write-the-tests">Time to write the tests</h2>
+</code></pre><h2 id="time-to-write-the-tests">Time to write the tests</h2>
 <p>Finally we can just write tests that adhere to <code>DBTest</code>'s function signature and run them with <code>RunDBTest</code>. Let's test creating a table and inserting a record.</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-go" data-lang="go"><span style="color:#f92672">package</span> <span style="color:#a6e22e">dbtest</span>
+<pre><code>package dbtest
 
-<span style="color:#f92672">import</span> (
-	<span style="color:#e6db74">&#34;database/sql&#34;</span>
-	<span style="color:#e6db74">&#34;testing&#34;</span>
+import (
+	&quot;database/sql&quot;
+	&quot;testing&quot;
 
-	<span style="color:#a6e22e">_</span> <span style="color:#e6db74">&#34;github.com/lib/pq&#34;</span>
+	_ &quot;github.com/lib/pq&quot;
 )
 
-<span style="color:#66d9ef">func</span> <span style="color:#a6e22e">createTable</span>(<span style="color:#a6e22e">conn</span> <span style="color:#f92672">*</span><span style="color:#a6e22e">sql</span>.<span style="color:#a6e22e">DB</span>) <span style="color:#66d9ef">error</span> {
-	<span style="color:#a6e22e">statement</span> <span style="color:#f92672">:=</span> <span style="color:#e6db74">`</span><span style="color:#e6db74">
-</span><span style="color:#e6db74">		CREATE TABLE Worker (
-</span><span style="color:#e6db74">			WorkerId SERIAL PRIMARY KEY,
-</span><span style="color:#e6db74">			Host     TEXT NOT NULL,
-</span><span style="color:#e6db74">			UsingTLS BOOLEAN NOT NULL
-</span><span style="color:#e6db74">		);</span><span style="color:#e6db74">`</span>
-	<span style="color:#a6e22e">_</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">conn</span>.<span style="color:#a6e22e">Exec</span>(<span style="color:#a6e22e">statement</span>)
-	<span style="color:#66d9ef">return</span> <span style="color:#a6e22e">err</span>
+func createTable(conn *sql.DB) error {
+	statement := `
+		CREATE TABLE Worker (
+			WorkerId SERIAL PRIMARY KEY,
+			Host     TEXT NOT NULL,
+			UsingTLS BOOLEAN NOT NULL
+		);`
+	_, err := conn.Exec(statement)
+	return err
 }
 
-<span style="color:#75715e">// Test creating a table
-</span><span style="color:#75715e"></span><span style="color:#66d9ef">func</span> <span style="color:#a6e22e">testCreateTable</span>(<span style="color:#a6e22e">t</span> <span style="color:#f92672">*</span><span style="color:#a6e22e">testing</span>.<span style="color:#a6e22e">T</span>, <span style="color:#a6e22e">conn</span> <span style="color:#f92672">*</span><span style="color:#a6e22e">sql</span>.<span style="color:#a6e22e">DB</span>) {
-	<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">createTable</span>(<span style="color:#a6e22e">conn</span>); <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
-		<span style="color:#a6e22e">t</span>.<span style="color:#a6e22e">Error</span>(<span style="color:#a6e22e">err</span>)
+// Test creating a table
+func testCreateTable(t *testing.T, conn *sql.DB) {
+	if err := createTable(conn); err != nil {
+		t.Error(err)
 	}
 }
 
-<span style="color:#75715e">// Test creating a table then inserting a row
-</span><span style="color:#75715e"></span><span style="color:#66d9ef">func</span> <span style="color:#a6e22e">testInsertWorker</span>(<span style="color:#a6e22e">t</span> <span style="color:#f92672">*</span><span style="color:#a6e22e">testing</span>.<span style="color:#a6e22e">T</span>, <span style="color:#a6e22e">conn</span> <span style="color:#f92672">*</span><span style="color:#a6e22e">sql</span>.<span style="color:#a6e22e">DB</span>) {
-	<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">createTable</span>(<span style="color:#a6e22e">conn</span>); <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
-		<span style="color:#a6e22e">t</span>.<span style="color:#a6e22e">Error</span>(<span style="color:#a6e22e">err</span>)
-		<span style="color:#66d9ef">return</span>
+// Test creating a table then inserting a row
+func testInsertWorker(t *testing.T, conn *sql.DB) {
+	if err := createTable(conn); err != nil {
+		t.Error(err)
+		return
 	}
-	<span style="color:#a6e22e">insertWorker</span> <span style="color:#f92672">:=</span> <span style="color:#e6db74">`</span><span style="color:#e6db74">INSERT INTO Worker (Host, UsingTLS) VALUES ($1, $2);</span><span style="color:#e6db74">`</span>
-	<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">_</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">conn</span>.<span style="color:#a6e22e">Exec</span>(<span style="color:#a6e22e">insertWorker</span>, <span style="color:#e6db74">&#34;10.0.0.3&#34;</span>, <span style="color:#66d9ef">true</span>); <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
-		<span style="color:#a6e22e">t</span>.<span style="color:#a6e22e">Error</span>(<span style="color:#a6e22e">err</span>)
+	insertWorker := `INSERT INTO Worker (Host, UsingTLS) VALUES ($1, $2);`
+	if _, err := conn.Exec(insertWorker, &quot;10.0.0.3&quot;, true); err != nil {
+		t.Error(err)
 	}
 }
 
-<span style="color:#75715e">// Test multiple versions of Postgres
-</span><span style="color:#75715e"></span><span style="color:#66d9ef">const</span> (
-	<span style="color:#a6e22e">version94</span> = <span style="color:#e6db74">&#34;9.4&#34;</span>
-	<span style="color:#a6e22e">version95</span> = <span style="color:#e6db74">&#34;9.5&#34;</span>
+// Test multiple versions of Postgres
+const (
+	version94 = &quot;9.4&quot;
+	version95 = &quot;9.5&quot;
 )
 
-<span style="color:#75715e">// The actual Go tests just immediately call RunDBTest
-</span><span style="color:#75715e"></span><span style="color:#66d9ef">func</span> <span style="color:#a6e22e">TestCreateTable94</span>(<span style="color:#a6e22e">t</span> <span style="color:#f92672">*</span><span style="color:#a6e22e">testing</span>.<span style="color:#a6e22e">T</span>)  { <span style="color:#a6e22e">RunDBTest</span>(<span style="color:#a6e22e">t</span>, <span style="color:#a6e22e">version94</span>, <span style="color:#a6e22e">testCreateTable</span>) }
-<span style="color:#66d9ef">func</span> <span style="color:#a6e22e">TestCreateTable95</span>(<span style="color:#a6e22e">t</span> <span style="color:#f92672">*</span><span style="color:#a6e22e">testing</span>.<span style="color:#a6e22e">T</span>)  { <span style="color:#a6e22e">RunDBTest</span>(<span style="color:#a6e22e">t</span>, <span style="color:#a6e22e">version95</span>, <span style="color:#a6e22e">testCreateTable</span>) }
-<span style="color:#66d9ef">func</span> <span style="color:#a6e22e">TestInsertWorker94</span>(<span style="color:#a6e22e">t</span> <span style="color:#f92672">*</span><span style="color:#a6e22e">testing</span>.<span style="color:#a6e22e">T</span>) { <span style="color:#a6e22e">RunDBTest</span>(<span style="color:#a6e22e">t</span>, <span style="color:#a6e22e">version94</span>, <span style="color:#a6e22e">testInsertWorker</span>) }
-<span style="color:#66d9ef">func</span> <span style="color:#a6e22e">TestInsertWorker95</span>(<span style="color:#a6e22e">t</span> <span style="color:#f92672">*</span><span style="color:#a6e22e">testing</span>.<span style="color:#a6e22e">T</span>) { <span style="color:#a6e22e">RunDBTest</span>(<span style="color:#a6e22e">t</span>, <span style="color:#a6e22e">version95</span>, <span style="color:#a6e22e">testInsertWorker</span>) }
-</code></pre></div><p>This setup enables a bunch of cool things like tests against different versions of Postgres. Once we (or importantly, one of our coworkers) have pulled the correct Postgres images, we just have to run <code>go test</code>. The only dependencies are Go and Docker.</p>
-<pre><code class="language-nohighlight" data-lang="nohighlight">$ go test -v
+// The actual Go tests just immediately call RunDBTest
+func TestCreateTable94(t *testing.T)  { RunDBTest(t, version94, testCreateTable) }
+func TestCreateTable95(t *testing.T)  { RunDBTest(t, version95, testCreateTable) }
+func TestInsertWorker94(t *testing.T) { RunDBTest(t, version94, testInsertWorker) }
+func TestInsertWorker95(t *testing.T) { RunDBTest(t, version95, testInsertWorker) }
+</code></pre><p>This setup enables a bunch of cool things like tests against different versions of Postgres. Once we (or importantly, one of our coworkers) have pulled the correct Postgres images, we just have to run <code>go test</code>. The only dependencies are Go and Docker.</p>
+<pre><code>$ go test -v
 === RUN   TestCreateTable94
 --- PASS: TestCreateTable94 (6.21s)
 === RUN   TestCreateTable95

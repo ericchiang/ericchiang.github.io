@@ -68,8 +68,8 @@ Dependency hell. Where it&#39;s impossible to run a test on your laptop. Where b
       <pubDate>Sun, 21 Jun 2015 00:00:00 +0000</pubDate>
       
       <guid>https://ericchiang.github.io/post/go-tls/</guid>
-      <description>For a long time my knowledge of TLS was Googling &amp;ldquo;how to configure nginx as an HTTPS proxy.&amp;rdquo; Okay, the cert goes here and the key goes here, that&#39;s my job done. But with more and more pushes for things HTTPS and HTTP/2 (which defaults to using TLS), it sometimes helps to understand this a little better.
-Unfortunately a lot of the articles on this topic are either too high level or too specific and, when I need to learn the topic, I ended up just reading the Go documentation.</description>
+      <description>NOTE: For an updated version of this post, see the GopherCon 2019 talk &amp;ldquo;PKI for Gopher&amp;rdquo;. (Video, Slides)
+For a long time my knowledge of TLS was Googling &amp;ldquo;how to configure nginx as an HTTPS proxy.&amp;rdquo; Okay, the cert goes here and the key goes here, that&#39;s my job done. But with more and more pushes for things HTTPS and HTTP/2 (which defaults to using TLS), it sometimes helps to understand this a little better.</description>
     </item>
     
   </channel>

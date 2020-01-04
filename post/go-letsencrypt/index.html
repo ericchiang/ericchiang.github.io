@@ -49,64 +49,64 @@ if (!doNotTrack) {
 <p>First let's generate a key pair for our account.</p>
 <pre><code class="language-nohighlight" data-lang="nohighlight">ssh-keygen -t rsa -b 4096 -C &quot;your_email@example.com&quot; -f letsencrypt -N ''
 </code></pre><p>Then we'll load the private key and register it with the server.</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-go" data-lang="go"><span style="color:#f92672">package</span> <span style="color:#a6e22e">main</span>
+<pre><code>package main
 
-<span style="color:#f92672">import</span> (
-	<span style="color:#75715e">// hint, hint: use goimports to fill in the imports
-</span><span style="color:#75715e"></span>
-	<span style="color:#e6db74">&#34;github.com/ericchiang/letsencrypt&#34;</span>
+import (
+	// hint, hint: use goimports to fill in the imports
+
+	&quot;github.com/ericchiang/letsencrypt&quot;
 )
 
-<span style="color:#66d9ef">func</span> <span style="color:#a6e22e">main</span>() {
-	<span style="color:#75715e">// Create a client.
-</span><span style="color:#75715e"></span>	<span style="color:#a6e22e">cli</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">letsencrypt</span>.<span style="color:#a6e22e">NewClient</span>(<span style="color:#e6db74">&#34;http://localhost:4000/directory&#34;</span>)
-	<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
-		<span style="color:#a6e22e">log</span>.<span style="color:#a6e22e">Fatal</span>(<span style="color:#a6e22e">err</span>)
+func main() {
+	// Create a client.
+	cli, err := letsencrypt.NewClient(&quot;http://localhost:4000/directory&quot;)
+	if err != nil {
+		log.Fatal(err)
 	}
 
-	<span style="color:#75715e">// Load the private key and register with the ACME server.
-</span><span style="color:#75715e"></span>	<span style="color:#a6e22e">key</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">loadKey</span>(<span style="color:#e6db74">&#34;letsencrypt&#34;</span>)
-	<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
-		<span style="color:#a6e22e">log</span>.<span style="color:#a6e22e">Fatal</span>(<span style="color:#a6e22e">err</span>)
+	// Load the private key and register with the ACME server.
+	key, err := loadKey(&quot;letsencrypt&quot;)
+	if err != nil {
+		log.Fatal(err)
 	}
-	<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">_</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">cli</span>.<span style="color:#a6e22e">NewRegistration</span>(<span style="color:#a6e22e">key</span>); <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
-		<span style="color:#a6e22e">log</span>.<span style="color:#a6e22e">Fatal</span>(<span style="color:#a6e22e">err</span>)
+	if _, err := cli.NewRegistration(key); err != nil {
+		log.Fatal(err)
 	}
-	<span style="color:#a6e22e">fmt</span>.<span style="color:#a6e22e">Println</span>(<span style="color:#e6db74">&#34;Registration successful!&#34;</span>)
+	fmt.Println(&quot;Registration successful!&quot;)
 }
 
-<span style="color:#75715e">// loadKey reads and parses a private RSA key.
-</span><span style="color:#75715e"></span><span style="color:#66d9ef">func</span> <span style="color:#a6e22e">loadKey</span>(<span style="color:#a6e22e">file</span> <span style="color:#66d9ef">string</span>) (<span style="color:#f92672">*</span><span style="color:#a6e22e">rsa</span>.<span style="color:#a6e22e">PrivateKey</span>, <span style="color:#66d9ef">error</span>) {
-	<span style="color:#a6e22e">data</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">ioutil</span>.<span style="color:#a6e22e">ReadFile</span>(<span style="color:#a6e22e">file</span>)
-	<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
-		<span style="color:#66d9ef">return</span> <span style="color:#66d9ef">nil</span>, <span style="color:#a6e22e">err</span>
+// loadKey reads and parses a private RSA key.
+func loadKey(file string) (*rsa.PrivateKey, error) {
+	data, err := ioutil.ReadFile(file)
+	if err != nil {
+		return nil, err
 	}
-	<span style="color:#a6e22e">block</span>, <span style="color:#a6e22e">_</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">pem</span>.<span style="color:#a6e22e">Decode</span>(<span style="color:#a6e22e">data</span>)
-	<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">block</span> <span style="color:#f92672">==</span> <span style="color:#66d9ef">nil</span> {
-		<span style="color:#66d9ef">return</span> <span style="color:#66d9ef">nil</span>, <span style="color:#a6e22e">errors</span>.<span style="color:#a6e22e">New</span>(<span style="color:#e6db74">&#34;pem decode: no key found&#34;</span>)
+	block, _ := pem.Decode(data)
+	if block == nil {
+		return nil, errors.New(&quot;pem decode: no key found&quot;)
 	}
-	<span style="color:#66d9ef">return</span> <span style="color:#a6e22e">x509</span>.<span style="color:#a6e22e">ParsePKCS1PrivateKey</span>(<span style="color:#a6e22e">block</span>.<span style="color:#a6e22e">Bytes</span>)
+	return x509.ParsePKCS1PrivateKey(block.Bytes)
 }
-</code></pre></div><p>Nothing too crazy yet.</p>
+</code></pre><p>Nothing too crazy yet.</p>
 <pre><code class="language-nohighlight" data-lang="nohighlight">$ go run step1.go
 Registration successful!
 </code></pre><h2 id="step-2-requesting-challenges">Step 2: Requesting challenges</h2>
 <p>Once we've registered a key pair the next step is to begin a challenge for a specific domain. In this case we'll be asking for the DNS name <code>example.org</code>.</p>
 <p>The server responds to an authorization request with a list of challenges supported for that domain and a list of combinations of challenges to perform. We'll print the response and take a look at the results.</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-go" data-lang="go"><span style="color:#a6e22e">auth</span>, <span style="color:#a6e22e">_</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">cli</span>.<span style="color:#a6e22e">NewAuthorization</span>(<span style="color:#a6e22e">key</span>, <span style="color:#e6db74">&#34;dns&#34;</span>, <span style="color:#e6db74">&#34;example.org&#34;</span>)
-<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
-	<span style="color:#a6e22e">log</span>.<span style="color:#a6e22e">Fatal</span>(<span style="color:#a6e22e">err</span>)
+<pre><code>auth, _, err := cli.NewAuthorization(key, &quot;dns&quot;, &quot;example.org&quot;)
+if err != nil {
+	log.Fatal(err)
 }
 
-<span style="color:#a6e22e">fmt</span>.<span style="color:#a6e22e">Println</span>(<span style="color:#e6db74">&#34;Challenges:&#34;</span>)
-<span style="color:#66d9ef">for</span> <span style="color:#a6e22e">_</span>, <span style="color:#a6e22e">chal</span> <span style="color:#f92672">:=</span> <span style="color:#66d9ef">range</span> <span style="color:#a6e22e">auth</span>.<span style="color:#a6e22e">Challenges</span> {
-	<span style="color:#a6e22e">fmt</span>.<span style="color:#a6e22e">Println</span>(<span style="color:#a6e22e">chal</span>.<span style="color:#a6e22e">Type</span>, <span style="color:#a6e22e">chal</span>.<span style="color:#a6e22e">URI</span>)
+fmt.Println(&quot;Challenges:&quot;)
+for _, chal := range auth.Challenges {
+	fmt.Println(chal.Type, chal.URI)
 }
-<span style="color:#a6e22e">fmt</span>.<span style="color:#a6e22e">Println</span>(<span style="color:#e6db74">&#34;Combinations:&#34;</span>)
-<span style="color:#66d9ef">for</span> <span style="color:#a6e22e">_</span>, <span style="color:#a6e22e">comb</span> <span style="color:#f92672">:=</span> <span style="color:#66d9ef">range</span> <span style="color:#a6e22e">auth</span>.<span style="color:#a6e22e">Combs</span> {
-	<span style="color:#a6e22e">fmt</span>.<span style="color:#a6e22e">Println</span>(<span style="color:#a6e22e">comb</span>)
+fmt.Println(&quot;Combinations:&quot;)
+for _, comb := range auth.Combs {
+	fmt.Println(comb)
 }
-</code></pre></div><pre><code class="language-nohighlight" data-lang="nohighlight">$ go run step2.go 
+</code></pre><pre><code class="language-nohighlight" data-lang="nohighlight">$ go run step2.go 
 Challenges:
 simpleHttp http://127.0.0.1:4000/acme/challenge/aOOnrY65LHMSYK6HftGeK795dqEII40NYGVESqqKmGA/1
 dvsni http://127.0.0.1:4000/acme/challenge/aOOnrY65LHMSYK6HftGeK795dqEII40NYGVESqqKmGA/2
@@ -123,28 +123,28 @@ Combinations:
 <h2 id="step-3-complete-a-challenge">Step 3: Complete a challenge</h2>
 <p>The server has now challenged us to provision either an HTTP or TLS resource. It's our turn to do so then inform the server we're ready.</p>
 <p>Let's take a look at the HTTP challenge.</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-go" data-lang="go"><span style="color:#75715e">// grab the HTTP challenge again
-</span><span style="color:#75715e"></span><span style="color:#a6e22e">httpChalURL</span> <span style="color:#f92672">:=</span> <span style="color:#e6db74">&#34;http://127.0.0.1:4000/acme/challenge/aOOnrY65LHMSYK6HftGeK795dqEII40NYGVESqqKmGA/3&#34;</span>
-<span style="color:#a6e22e">chal</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">cli</span>.<span style="color:#a6e22e">Challenge</span>(<span style="color:#a6e22e">httpChalURL</span>)
-<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
-	<span style="color:#a6e22e">log</span>.<span style="color:#a6e22e">Fatal</span>(<span style="color:#a6e22e">err</span>)
+<pre><code>// grab the HTTP challenge again
+httpChalURL := &quot;http://127.0.0.1:4000/acme/challenge/aOOnrY65LHMSYK6HftGeK795dqEII40NYGVESqqKmGA/3&quot;
+chal, err := cli.Challenge(httpChalURL)
+if err != nil {
+	log.Fatal(err)
 }
 
-<span style="color:#75715e">// print the challenge
-</span><span style="color:#75715e"></span><span style="color:#a6e22e">out</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">json</span>.<span style="color:#a6e22e">MarshalIndent</span>(<span style="color:#f92672">&amp;</span><span style="color:#a6e22e">chal</span>, <span style="color:#e6db74">&#34;&#34;</span>, <span style="color:#e6db74">&#34;  &#34;</span>)
-<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
-	<span style="color:#a6e22e">log</span>.<span style="color:#a6e22e">Fatal</span>(<span style="color:#a6e22e">err</span>)
+// print the challenge
+out, err := json.MarshalIndent(&amp;chal, &quot;&quot;, &quot;  &quot;)
+if err != nil {
+	log.Fatal(err)
 }
-<span style="color:#a6e22e">fmt</span>.<span style="color:#a6e22e">Printf</span>(<span style="color:#e6db74">&#34;%s\n&#34;</span>, <span style="color:#a6e22e">out</span>)
+fmt.Printf(&quot;%s\n&quot;, out)
 
-<span style="color:#75715e">// get the challenge details
-</span><span style="color:#75715e"></span><span style="color:#a6e22e">path</span>, <span style="color:#a6e22e">resource</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">chal</span>.<span style="color:#a6e22e">HTTP</span>(<span style="color:#a6e22e">key</span>)
-<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
-	<span style="color:#a6e22e">log</span>.<span style="color:#a6e22e">Fatal</span>(<span style="color:#a6e22e">err</span>)
+// get the challenge details
+path, resource, err := chal.HTTP(key)
+if err != nil {
+	log.Fatal(err)
 }
-<span style="color:#a6e22e">fmt</span>.<span style="color:#a6e22e">Println</span>(<span style="color:#e6db74">&#34;Path:    &#34;</span>, <span style="color:#a6e22e">path</span>)
-<span style="color:#a6e22e">fmt</span>.<span style="color:#a6e22e">Println</span>(<span style="color:#e6db74">&#34;Resource:&#34;</span>, <span style="color:#a6e22e">resource</span>)
-</code></pre></div><pre><code class="language-nohighlight" data-lang="nohighlight">$ go run step3.go 
+fmt.Println(&quot;Path:    &quot;, path)
+fmt.Println(&quot;Resource:&quot;, resource)
+</code></pre><pre><code class="language-nohighlight" data-lang="nohighlight">$ go run step3.go 
 {
   &quot;type&quot;: &quot;http-01&quot;,
   &quot;uri&quot;: &quot;http://127.0.0.1:4000/acme/challenge/aOOnrY65LHMSYK6HftGeK795dqEII40NYGVESqqKmGA/3&quot;,
@@ -155,21 +155,21 @@ Path:     /.well-known/acme-challenge/1UMQfJKJWZwOmisxPTso_nR9tEP_42PHsq3EcibGbt
 Resource: 1UMQfJKJWZwOmisxPTso_nR9tEP_42PHsq3EcibGbtE.wF6w7g9k8byiDJcjhwNpLP883uGpxGZL0NdPTEy5PSc
 </code></pre><p>As you can see the server has returned a challenge of type <code>http-01</code> and a token. <a href="https://tools.ietf.org/html/draft-ietf-acme-acme-01#section-7.2">The spec</a> documents how to combine that token with the client's private key into a URL path and a HTTP response.</p>
 <p>To actually serve the file, we'll need to spin up a HTTP server on the domain we've requested. We then notify the server that the challenge is ready for verification, and poll the challenge until we get a result.</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-go" data-lang="go"><span style="color:#66d9ef">go</span> <span style="color:#66d9ef">func</span>() {
-	<span style="color:#75715e">// serve the resource at the given path
-</span><span style="color:#75715e"></span>	<span style="color:#a6e22e">http</span>.<span style="color:#a6e22e">HandleFunc</span>(<span style="color:#a6e22e">path</span>, <span style="color:#66d9ef">func</span>(<span style="color:#a6e22e">w</span> <span style="color:#a6e22e">http</span>.<span style="color:#a6e22e">ResponseWriter</span>, <span style="color:#a6e22e">r</span> <span style="color:#f92672">*</span><span style="color:#a6e22e">http</span>.<span style="color:#a6e22e">Request</span>) {
-		<span style="color:#a6e22e">io</span>.<span style="color:#a6e22e">WriteString</span>(<span style="color:#a6e22e">w</span>, <span style="color:#a6e22e">resource</span>)
+<pre><code>go func() {
+	// serve the resource at the given path
+	http.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
+		io.WriteString(w, resource)
 	})
-	<span style="color:#75715e">// Start the HTTP server.
-</span><span style="color:#75715e"></span>	<span style="color:#75715e">// The test Let&#39;s Encrypt server uses port 5002 instead of 80.
-</span><span style="color:#75715e"></span>	<span style="color:#a6e22e">log</span>.<span style="color:#a6e22e">Fatal</span>(<span style="color:#a6e22e">http</span>.<span style="color:#a6e22e">ListenAndServe</span>(<span style="color:#e6db74">&#34;:5002&#34;</span>, <span style="color:#66d9ef">nil</span>))
+	// Start the HTTP server.
+	// The test Let's Encrypt server uses port 5002 instead of 80.
+	log.Fatal(http.ListenAndServe(&quot;:5002&quot;, nil))
 }()
 
-<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">cli</span>.<span style="color:#a6e22e">ChallengeReady</span>(<span style="color:#a6e22e">key</span>, <span style="color:#a6e22e">chal</span>); <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
-	<span style="color:#a6e22e">log</span>.<span style="color:#a6e22e">Fatal</span>(<span style="color:#a6e22e">err</span>)
+if err := cli.ChallengeReady(key, chal); err != nil {
+	log.Fatal(err)
 }
-<span style="color:#a6e22e">fmt</span>.<span style="color:#a6e22e">Println</span>(<span style="color:#e6db74">&#34;You&#39;ve completed the challenge!&#34;</span>)
-</code></pre></div><pre><code class="language-nohighlight" data-lang="nohighlight">$ go run step3.go 
+fmt.Println(&quot;You've completed the challenge!&quot;)
+</code></pre><pre><code class="language-nohighlight" data-lang="nohighlight">$ go run step3.go 
 You've completed the challenge!
 </code></pre><p>And that's it. We've provisioned the resource, the server checked that it was there, and the challenge has been verified.</p>
 <p>For examples of completing other challenges, see the <a href="https://github.com/ericchiang/letsencrypt#challenges">README</a>.</p>
@@ -178,106 +178,106 @@ You've completed the challenge!
 <p>First, the client generates a certificate request. This holds information like which domain we want a certificate for, what public key it will use, and what algorithms the server should use to sign it. Second, we send the certificate request to server and (if all goes well) it will respond with a certificate.</p>
 <h3 id="step-41-creating-a-certificate-request">Step 4.1: Creating a certificate request</h3>
 <p>You can use tools like <code>openssl</code> to generate these request. But since we're talking Go, here's how you make one using the standard library.</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-go" data-lang="go"><span style="color:#f92672">package</span> <span style="color:#a6e22e">main</span>
+<pre><code>package main
 
-<span style="color:#f92672">import</span> (
-	<span style="color:#75715e">// ...
-</span><span style="color:#75715e"></span>)
-
-<span style="color:#66d9ef">func</span> <span style="color:#a6e22e">main</span>() {
-	<span style="color:#a6e22e">certKey</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">rsa</span>.<span style="color:#a6e22e">GenerateKey</span>(<span style="color:#a6e22e">rand</span>.<span style="color:#a6e22e">Reader</span>, <span style="color:#ae81ff">2048</span>)
-	<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
-		<span style="color:#a6e22e">log</span>.<span style="color:#a6e22e">Fatal</span>(<span style="color:#a6e22e">err</span>)
-	}
-
-	<span style="color:#a6e22e">template</span> <span style="color:#f92672">:=</span> <span style="color:#f92672">&amp;</span><span style="color:#a6e22e">x509</span>.<span style="color:#a6e22e">CertificateRequest</span>{
-		<span style="color:#a6e22e">SignatureAlgorithm</span>: <span style="color:#a6e22e">x509</span>.<span style="color:#a6e22e">SHA256WithRSA</span>,
-		<span style="color:#a6e22e">PublicKeyAlgorithm</span>: <span style="color:#a6e22e">x509</span>.<span style="color:#a6e22e">RSA</span>,
-		<span style="color:#a6e22e">PublicKey</span>:          <span style="color:#f92672">&amp;</span><span style="color:#a6e22e">certKey</span>.<span style="color:#a6e22e">PublicKey</span>,
-		<span style="color:#a6e22e">Subject</span>:            <span style="color:#a6e22e">pkix</span>.<span style="color:#a6e22e">Name</span>{<span style="color:#a6e22e">CommonName</span>: <span style="color:#e6db74">&#34;example.org&#34;</span>},
-		<span style="color:#a6e22e">DNSNames</span>:           []<span style="color:#66d9ef">string</span>{<span style="color:#e6db74">&#34;example.org&#34;</span>},
-	}
-	<span style="color:#a6e22e">csrDER</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">x509</span>.<span style="color:#a6e22e">CreateCertificateRequest</span>(<span style="color:#a6e22e">rand</span>.<span style="color:#a6e22e">Reader</span>, <span style="color:#a6e22e">template</span>, <span style="color:#a6e22e">certKey</span>)
-	<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
-		<span style="color:#a6e22e">log</span>.<span style="color:#a6e22e">Fatal</span>(<span style="color:#a6e22e">err</span>)
-	}
-
-	<span style="color:#a6e22e">pemEncode</span> <span style="color:#f92672">:=</span> <span style="color:#66d9ef">func</span>(<span style="color:#a6e22e">b</span> []<span style="color:#66d9ef">byte</span>, <span style="color:#a6e22e">t</span> <span style="color:#66d9ef">string</span>) []<span style="color:#66d9ef">byte</span> {
-		<span style="color:#66d9ef">return</span> <span style="color:#a6e22e">pem</span>.<span style="color:#a6e22e">EncodeToMemory</span>(<span style="color:#f92672">&amp;</span><span style="color:#a6e22e">pem</span>.<span style="color:#a6e22e">Block</span>{<span style="color:#a6e22e">Bytes</span>: <span style="color:#a6e22e">b</span>, <span style="color:#a6e22e">Type</span>: <span style="color:#a6e22e">t</span>})
-	}
-
-	<span style="color:#a6e22e">keyPEM</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">pemEncode</span>(<span style="color:#a6e22e">x509</span>.<span style="color:#a6e22e">MarshalPKCS1PrivateKey</span>(<span style="color:#a6e22e">certKey</span>), <span style="color:#e6db74">&#34;RSA PRIVATE KEY&#34;</span>)
-	<span style="color:#a6e22e">csrPEM</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">pemEncode</span>(<span style="color:#a6e22e">csrDER</span>, <span style="color:#e6db74">&#34;CERTIFICATE REQUEST&#34;</span>)
-
-	<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">ioutil</span>.<span style="color:#a6e22e">WriteFile</span>(<span style="color:#e6db74">&#34;example.org.csr&#34;</span>, <span style="color:#a6e22e">csrPEM</span>, <span style="color:#ae81ff">0644</span>); <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
-		<span style="color:#a6e22e">log</span>.<span style="color:#a6e22e">Fatal</span>(<span style="color:#a6e22e">err</span>)
-	}
-	<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">ioutil</span>.<span style="color:#a6e22e">WriteFile</span>(<span style="color:#e6db74">&#34;example.org.key&#34;</span>, <span style="color:#a6e22e">keyPEM</span>, <span style="color:#ae81ff">0644</span>); <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
-		<span style="color:#a6e22e">log</span>.<span style="color:#a6e22e">Fatal</span>(<span style="color:#a6e22e">err</span>)
-	}
-}
-</code></pre></div><p>Running this will create <code>example.org.csr</code> and <code>example.org.key</code>.</p>
-<h3 id="step-42-requesting-a-certificate">Step 4.2: Requesting a certificate</h3>
-<p>Finally we sign the certificate request using our account's key (not the one used to generate the request) and send it to the server. Since the account associated with the key has completed the challenges for the domain we've requested, it should issue us a certificate.</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-go" data-lang="go"><span style="color:#f92672">package</span> <span style="color:#a6e22e">main</span>
-
-<span style="color:#f92672">import</span> (
-	<span style="color:#75715e">// ...
-</span><span style="color:#75715e"></span>
-	<span style="color:#e6db74">&#34;github.com/ericchiang/letsencrypt&#34;</span>
+import (
+	// ...
 )
 
-<span style="color:#66d9ef">func</span> <span style="color:#a6e22e">main</span>() {
-	<span style="color:#a6e22e">cli</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">letsencrypt</span>.<span style="color:#a6e22e">NewClient</span>(<span style="color:#e6db74">&#34;http://localhost:4000/directory&#34;</span>)
-	<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
-		<span style="color:#a6e22e">log</span>.<span style="color:#a6e22e">Fatal</span>(<span style="color:#a6e22e">err</span>)
+func main() {
+	certKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		log.Fatal(err)
 	}
 
-	<span style="color:#75715e">// load the account&#39;s private key and the certificate request
-</span><span style="color:#75715e"></span>	<span style="color:#a6e22e">key</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">loadKey</span>(<span style="color:#e6db74">&#34;letsencrypt&#34;</span>)
-	<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
-		<span style="color:#a6e22e">log</span>.<span style="color:#a6e22e">Fatal</span>(<span style="color:#a6e22e">err</span>)
+	template := &amp;x509.CertificateRequest{
+		SignatureAlgorithm: x509.SHA256WithRSA,
+		PublicKeyAlgorithm: x509.RSA,
+		PublicKey:          &amp;certKey.PublicKey,
+		Subject:            pkix.Name{CommonName: &quot;example.org&quot;},
+		DNSNames:           []string{&quot;example.org&quot;},
 	}
-	<span style="color:#a6e22e">csr</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">loadCSR</span>(<span style="color:#e6db74">&#34;example.org.csr&#34;</span>)
-	<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
-		<span style="color:#a6e22e">log</span>.<span style="color:#a6e22e">Fatal</span>(<span style="color:#a6e22e">err</span>)
+	csrDER, err := x509.CreateCertificateRequest(rand.Reader, template, certKey)
+	if err != nil {
+		log.Fatal(err)
 	}
 
-	<span style="color:#75715e">// ask for a new certifiate
-</span><span style="color:#75715e"></span>	<span style="color:#a6e22e">cert</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">cli</span>.<span style="color:#a6e22e">NewCertificate</span>(<span style="color:#a6e22e">key</span>, <span style="color:#a6e22e">csr</span>)
-	<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
-		<span style="color:#a6e22e">log</span>.<span style="color:#a6e22e">Fatal</span>(<span style="color:#a6e22e">err</span>)
+	pemEncode := func(b []byte, t string) []byte {
+		return pem.EncodeToMemory(&amp;pem.Block{Bytes: b, Type: t})
 	}
-	<span style="color:#a6e22e">data</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">pem</span>.<span style="color:#a6e22e">EncodeToMemory</span>(<span style="color:#f92672">&amp;</span><span style="color:#a6e22e">pem</span>.<span style="color:#a6e22e">Block</span>{<span style="color:#a6e22e">Bytes</span>: <span style="color:#a6e22e">cert</span>.<span style="color:#a6e22e">Raw</span>, <span style="color:#a6e22e">Type</span>: <span style="color:#e6db74">&#34;CERTIFICATE&#34;</span>})
-	<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">ioutil</span>.<span style="color:#a6e22e">WriteFile</span>(<span style="color:#e6db74">&#34;example.org.crt&#34;</span>, <span style="color:#a6e22e">data</span>, <span style="color:#ae81ff">0644</span>); <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
-		<span style="color:#a6e22e">log</span>.<span style="color:#a6e22e">Fatal</span>(<span style="color:#a6e22e">err</span>)
+
+	keyPEM := pemEncode(x509.MarshalPKCS1PrivateKey(certKey), &quot;RSA PRIVATE KEY&quot;)
+	csrPEM := pemEncode(csrDER, &quot;CERTIFICATE REQUEST&quot;)
+
+	if err := ioutil.WriteFile(&quot;example.org.csr&quot;, csrPEM, 0644); err != nil {
+		log.Fatal(err)
+	}
+	if err := ioutil.WriteFile(&quot;example.org.key&quot;, keyPEM, 0644); err != nil {
+		log.Fatal(err)
+	}
+}
+</code></pre><p>Running this will create <code>example.org.csr</code> and <code>example.org.key</code>.</p>
+<h3 id="step-42-requesting-a-certificate">Step 4.2: Requesting a certificate</h3>
+<p>Finally we sign the certificate request using our account's key (not the one used to generate the request) and send it to the server. Since the account associated with the key has completed the challenges for the domain we've requested, it should issue us a certificate.</p>
+<pre><code>package main
+
+import (
+	// ...
+
+	&quot;github.com/ericchiang/letsencrypt&quot;
+)
+
+func main() {
+	cli, err := letsencrypt.NewClient(&quot;http://localhost:4000/directory&quot;)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// load the account's private key and the certificate request
+	key, err := loadKey(&quot;letsencrypt&quot;)
+	if err != nil {
+		log.Fatal(err)
+	}
+	csr, err := loadCSR(&quot;example.org.csr&quot;)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// ask for a new certifiate
+	cert, err := cli.NewCertificate(key, csr)
+	if err != nil {
+		log.Fatal(err)
+	}
+	data := pem.EncodeToMemory(&amp;pem.Block{Bytes: cert.Raw, Type: &quot;CERTIFICATE&quot;})
+	if err := ioutil.WriteFile(&quot;example.org.crt&quot;, data, 0644); err != nil {
+		log.Fatal(err)
 	}
 }
 
-<span style="color:#66d9ef">func</span> <span style="color:#a6e22e">loadKey</span>(<span style="color:#a6e22e">file</span> <span style="color:#66d9ef">string</span>) (<span style="color:#f92672">*</span><span style="color:#a6e22e">rsa</span>.<span style="color:#a6e22e">PrivateKey</span>, <span style="color:#66d9ef">error</span>) {
-	<span style="color:#a6e22e">data</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">ioutil</span>.<span style="color:#a6e22e">ReadFile</span>(<span style="color:#a6e22e">file</span>)
-	<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
-		<span style="color:#66d9ef">return</span> <span style="color:#66d9ef">nil</span>, <span style="color:#a6e22e">err</span>
+func loadKey(file string) (*rsa.PrivateKey, error) {
+	data, err := ioutil.ReadFile(file)
+	if err != nil {
+		return nil, err
 	}
-	<span style="color:#a6e22e">block</span>, <span style="color:#a6e22e">_</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">pem</span>.<span style="color:#a6e22e">Decode</span>(<span style="color:#a6e22e">data</span>)
-	<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">block</span> <span style="color:#f92672">==</span> <span style="color:#66d9ef">nil</span> {
-		<span style="color:#66d9ef">return</span> <span style="color:#66d9ef">nil</span>, <span style="color:#a6e22e">errors</span>.<span style="color:#a6e22e">New</span>(<span style="color:#e6db74">&#34;pem decode: no key found&#34;</span>)
+	block, _ := pem.Decode(data)
+	if block == nil {
+		return nil, errors.New(&quot;pem decode: no key found&quot;)
 	}
-	<span style="color:#66d9ef">return</span> <span style="color:#a6e22e">x509</span>.<span style="color:#a6e22e">ParsePKCS1PrivateKey</span>(<span style="color:#a6e22e">block</span>.<span style="color:#a6e22e">Bytes</span>)
+	return x509.ParsePKCS1PrivateKey(block.Bytes)
 }
 
-<span style="color:#66d9ef">func</span> <span style="color:#a6e22e">loadCSR</span>(<span style="color:#a6e22e">file</span> <span style="color:#66d9ef">string</span>) (<span style="color:#f92672">*</span><span style="color:#a6e22e">x509</span>.<span style="color:#a6e22e">CertificateRequest</span>, <span style="color:#66d9ef">error</span>) {
-	<span style="color:#a6e22e">data</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">ioutil</span>.<span style="color:#a6e22e">ReadFile</span>(<span style="color:#a6e22e">file</span>)
-	<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
-		<span style="color:#66d9ef">return</span> <span style="color:#66d9ef">nil</span>, <span style="color:#a6e22e">err</span>
+func loadCSR(file string) (*x509.CertificateRequest, error) {
+	data, err := ioutil.ReadFile(file)
+	if err != nil {
+		return nil, err
 	}
-	<span style="color:#a6e22e">block</span>, <span style="color:#a6e22e">_</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">pem</span>.<span style="color:#a6e22e">Decode</span>(<span style="color:#a6e22e">data</span>)
-	<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">block</span> <span style="color:#f92672">==</span> <span style="color:#66d9ef">nil</span> {
-		<span style="color:#66d9ef">return</span> <span style="color:#66d9ef">nil</span>, <span style="color:#a6e22e">errors</span>.<span style="color:#a6e22e">New</span>(<span style="color:#e6db74">&#34;pem decode: no key found&#34;</span>)
+	block, _ := pem.Decode(data)
+	if block == nil {
+		return nil, errors.New(&quot;pem decode: no key found&quot;)
 	}
-	<span style="color:#66d9ef">return</span> <span style="color:#a6e22e">x509</span>.<span style="color:#a6e22e">ParseCertificateRequest</span>(<span style="color:#a6e22e">block</span>.<span style="color:#a6e22e">Bytes</span>)
+	return x509.ParseCertificateRequest(block.Bytes)
 }
-</code></pre></div><pre><code class="language-nohighlight" data-lang="nohighlight">$ go run step4.go 
+</code></pre><pre><code class="language-nohighlight" data-lang="nohighlight">$ go run step4.go 
 $ cat example.org.crt
 -----BEGIN CERTIFICATE-----
 MIIEVzCCAz+gAwIBAgITAP9Jk5pSbvv6cgNUQrFxf/pzITANBgkqhkiG9w0BAQsF
