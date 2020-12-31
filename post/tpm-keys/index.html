@@ -482,7 +482,7 @@ MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEWa36okcsAUuswgF3vhkH8N+0dRao
 XkPamPSsWMK4+1NSWXJn+2QrptMLe/dHfo2g1eI5bAT/mq0eP8oDRgiA4A==
 -----END PUBLIC KEY-----
 </code></pre><h2 id="signing">Signing</h2>
-<p><em>Finally</em> after chaining several keys together, we can start using the application key. While you could add additional logic to authenticate a session or verify the algorithm was correct, a simple version of a <a href="https://golang.org/pkg/crypto/#Signer">crypto.Signer</a> simply calls the Sign method directly and unpacks the result.</p>
+<p><em>Finally</em> after chaining several keys together, we can start using the application key. While you could add additional logic to authenticate a session or verify the algorithm was correct, a simple version of a <a href="https://golang.org/pkg/crypto/#Signer">crypto.Signer</a> calls the Sign method directly and unpacks the result.</p>
 <p>Note that this code won’t work with <a href="https://trustedcomputinggroup.org/wp-content/uploads/TCG_TPM2_r1p59_Part1_Architecture_pub.pdf#page=196">restricted keys</a>, which can only sign messages hashed by the TPM first.</p>
 <pre><code>type signer struct {
         tpm io.ReadWriter
