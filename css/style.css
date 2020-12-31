@@ -28,6 +28,13 @@ p {
   font-size: large;
 }
 
+h2 {
+  font-size: xx-large;
+}
+h3 {
+  font-size: x-large;
+}
+
 /* code */
 pre {
   border: 1px solid #ddd;
