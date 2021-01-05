@@ -29,6 +29,8 @@ if (!doNotTrack) {
       
       <li><a href="/about/">about</a></li>
       
+      <li><a href="/license/">license</a></li>
+      
     </ul>
     <hr/>
     </nav>
@@ -40,11 +42,11 @@ if (!doNotTrack) {
 </div>
 
 <main>
-<p>Databases, authentication management, metric aggregators; there&rsquo;s a service or API for everything.</p>
-<p>There&rsquo;s also a place called dependency hell.</p>
-<p>Dependency hell. Where it&rsquo;s impossible to run a test on your laptop. Where bugs are found by running a main, clicking around, and seeing what breaks. Where you cross your fingers and pray that new versions don&rsquo;t break everything. Where we use mocks and stubs to combat a growing technology stack.</p>
+<p>Databases, authentication management, metric aggregators; there's a service or API for everything.</p>
+<p>There's also a place called dependency hell.</p>
+<p>Dependency hell. Where it's impossible to run a test on your laptop. Where bugs are found by running a main, clicking around, and seeing what breaks. Where you cross your fingers and pray that new versions don't break everything. Where we use mocks and stubs to combat a growing technology stack.</p>
 <p>But why mock when you can have the real thing?</p>
-<p>This post is about using Docker in test infrastructure. To run the code you&rsquo;ll need:</p>
+<p>This post is about using Docker in test infrastructure. To run the code you'll need:</p>
 <ol>
 <li>Go</li>
 <li>Docker running on your host machine (not boot2docker - sorry OS X and Windows users)</li>
@@ -52,7 +54,7 @@ if (!doNotTrack) {
 <h2 id="an-example-using-postgres">An example using Postgres</h2>
 <p>I work at a company that has a Go project that uses Postgres. How do you test database code? Maybe you can convince all of your employees to install Postgres with the exact same configuration. Maybe you could use SQLite to reduce dev setup times (never do this).</p>
 <p>Of course with the awesomeness of Linux containers you just need to use Docker!</p>
-<p>The workflow we&rsquo;re looking for: for each test, start a fresh instance of Postgres in a Docker container, then run the tests using it.</p>
+<p>The workflow we're looking for: for each test, start a fresh instance of Postgres in a Docker container, then run the tests using it.</p>
 <pre><code>dockerContainer, err := NewPostgresDB()
 if err != nil {
 	// handle error
@@ -60,7 +62,7 @@ if err != nil {
 defer destroy(dockerContainer)
 
 // run test
-</code></pre><p>For our code, the Postgres struct will look like this. There&rsquo;s only two bits of information that it&rsquo;ll hold, the port the container is running on and the ID of the container.</p>
+</code></pre><p>For our code, the Postgres struct will look like this. There's only two bits of information that it'll hold, the port the container is running on and the ID of the container.</p>
 <pre><code>type PostgresDB struct {
 	// Of form 'host:port'
 	Host string
@@ -68,7 +70,7 @@ defer destroy(dockerContainer)
 	// The container id assigned by docker
 	cid string
 }
-</code></pre><h2 id="postgres-docker-images">Postgres' Docker images</h2>
+</code></pre><h2 id="postgres-docker-images">Postgres&rsquo; Docker images</h2>
 <p>Postgres has an <a href="https://hub.docker.com/_/postgres/">official image</a> through Docker Hub. Most databases do.</p>
 <p>Starting a container is easy using Docker and will look something like the following.</p>
 <pre><code>docker run -d -p $HOSTPORT:5432 -e POSTGRES_PASSWORD=$PASS postgres:$VERSION
@@ -80,7 +82,7 @@ defer destroy(dockerContainer)
 	Database string // defaults to &quot;username&quot;
 	Version  string // defaults to &quot;latest&quot;
 }
-</code></pre><p>To create an instance of Postgres, we&rsquo;ll determine Docker&rsquo;s command line arguments given a config. Then run the Docker command through Go&rsquo;s <code>os/exec</code> library.</p>
+</code></pre><p>To create an instance of Postgres, we'll determine Docker's command line arguments given a config. Then run the Docker command through Go's <code>os/exec</code> library.</p>
 <pre><code>func NewPostgresDB(c PostgresConfig) (*PostgresDB, error) {
 	img := &quot;postgres:latest&quot;
 	if c.Version == &quot;&quot; {
@@ -122,7 +124,7 @@ defer destroy(dockerContainer)
 	}
 	return db, nil
 }
-</code></pre><p>The host address specified above is <code>127.0.0.1:0</code>. Port 0 is a way of telling the operating system to pick any available port. For testing it&rsquo;s nice to not hard code an explicit port in case the person running the tests has a conflicting service (like an actually Postgres database).</p>
+</code></pre><p>The host address specified above is <code>127.0.0.1:0</code>. Port 0 is a way of telling the operating system to pick any available port. For testing it's nice to not hard code an explicit port in case the person running the tests has a conflicting service (like an actually Postgres database).</p>
 <p><code>docker inspect</code> allows us figure out what port the operating system chose. This returns a giant JSON object with, among other things, network settings for the running container.</p>
 <pre><code>func portMapping(cid, containerPort string) (hostAddr string, err error) {
 	out, err := exec.Command(&quot;docker&quot;, &quot;inspect&quot;, cid).CombinedOutput()
@@ -151,7 +153,7 @@ defer destroy(dockerContainer)
 	}
 	return ports[0].HostIp + &quot;:&quot; + ports[0].HostPort, nil
 }
-</code></pre><p>Finally, closing the database should result in the entire container being removed. Again, we&rsquo;ll just use <code>os/exec</code> to call Docker.</p>
+</code></pre><p>Finally, closing the database should result in the entire container being removed. Again, we'll just use <code>os/exec</code> to call Docker.</p>
 <pre><code>// Close removes the container running the postgres database.
 func (db *PostgresDB) Close() error {
 	out, err := exec.Command(&quot;docker&quot;, &quot;rm&quot;, &quot;-f&quot;, db.cid).CombinedOutput()
@@ -165,7 +167,7 @@ func (db *PostgresDB) Close() error {
 <pre><code>func TestXyz(t *testing.T)
 </code></pre><p>We want to write tests that take a database connection as well. Something that looks like this:</p>
 <pre><code>type DBTest func(t *testing.T, conn *sql.DB)
-</code></pre><p>So let&rsquo;s write a function to run a <code>DBTest</code>. This steps will be</p>
+</code></pre><p>So let's write a function to run a <code>DBTest</code>. This steps will be</p>
 <ol>
 <li>Create a container</li>
 <li>Connect to the container</li>
@@ -222,7 +224,7 @@ func RunDBTest(t *testing.T, dbVersion string, test DBTest) {
 	t.Errorf(&quot;failed to connect to database: %v&quot;, err)
 }
 </code></pre><h2 id="time-to-write-the-tests">Time to write the tests</h2>
-<p>Finally we can just write tests that adhere to <code>DBTest</code>&rsquo;s function signature and run them with <code>RunDBTest</code>. Let&rsquo;s test creating a table and inserting a record.</p>
+<p>Finally we can just write tests that adhere to <code>DBTest</code>'s function signature and run them with <code>RunDBTest</code>. Let's test creating a table and inserting a record.</p>
 <pre><code>package dbtest
 
 import (
@@ -285,11 +287,11 @@ func TestInsertWorker95(t *testing.T) { RunDBTest(t, version95, testInsertWorker
 --- PASS: TestInsertWorker95 (5.83s)
 PASS
 ok  	_/p/go/dbtest	24.106s
-</code></pre><p>It&rsquo;s not blindingly fast, but most of the overhead is from Postgres' <a href="https://github.com/docker-library/postgres/blob/87b8be7e9b324ff2bcd6545d05895fac8f012dac/9.5/docker-entrypoint.sh">initialization</a>, not Docker. If you know your configuration ahead of time, it&rsquo;s easy to make a custom Docker image and speed things up.</p>
-<p>Importantly, we&rsquo;re testing against full installations of Postgres 9.4 and 9.5. No mocks, no sqlite.</p>
+</code></pre><p>It's not blindingly fast, but most of the overhead is from Postgres&rsquo; <a href="https://github.com/docker-library/postgres/blob/87b8be7e9b324ff2bcd6545d05895fac8f012dac/9.5/docker-entrypoint.sh">initialization</a>, not Docker. If you know your configuration ahead of time, it's easy to make a custom Docker image and speed things up.</p>
+<p>Importantly, we're testing against full installations of Postgres 9.4 and 9.5. No mocks, no sqlite.</p>
 <h2 id="things-other-than-databases">Things other than databases</h2>
 <p>This strategy is absolutely <em>not</em> limited to databases, and gets even cooler when you expand past just hitting an exposed port.</p>
-<p>With a little bit of imagination you can use Docker to test your Nginx config files, your RabbitMQ client, your WordPress plugins. For each test you&rsquo;ll get a fresh installation of the thing your testing against, and all a coworker needs to do is download a Docker image.</p>
+<p>With a little bit of imagination you can use Docker to test your Nginx config files, your RabbitMQ client, your WordPress plugins. For each test you'll get a fresh installation of the thing your testing against, and all a coworker needs to do is download a Docker image.</p>
 <p>So mount your files, use <a href="https://github.com/bradfitz/http2/blob/f8202bc903bda493ebba4aa54922d78430c2c42f/http2_test.go#L96-L102"><code>--net=host</code></a>, and who knows, you might even have a little fun writing tests.</p>
 
 </main>

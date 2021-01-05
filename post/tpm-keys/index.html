@@ -29,6 +29,8 @@ if (!doNotTrack) {
       
       <li><a href="/about/">about</a></li>
       
+      <li><a href="/license/">license</a></li>
+      
     </ul>
     <hr/>
     </nav>
@@ -36,11 +38,11 @@ if (!doNotTrack) {
 <div class="article-meta">
 <h1><span class="title">The Trusted Platform Module Key Hierarchy</span></h1>
 
-<h2 class="date">2020/12/30</h2>
+<h2 class="date">2021/01/04</h2>
 </div>
 
 <main>
-<p>The Trusted Platform Module is a security device built into all modern hardware qualified for Windows. TPMs can provide assurances about the kernel and boot sequence even if those systems have been compromised, and underpin technologies like Windows’ BitLocker, various <a href="https://www.chromium.org/developers/design-documents/tpm-usage">ChromeOS</a> systems, and Linux’s Integrity Measurement Architecture.</p>
+<p>The Trusted Platform Module is a security device that sits on a physical motherboard, runs in a CPU trust zone, or is provided by a hypervisor. By functioning below the OS and boot sequence, it provides a trust anchor to verify those systems even if they’ve been compromised. TPMs are required for any device qualified for Windows, underpinning technologies like Windows’ BitLocker, various features in <a href="https://www.chromium.org/developers/design-documents/tpm-usage">ChromeOS</a>, and Linux’s Integrity Measurement Architecture.</p>
 <p>But looking at the <a href="https://trustedcomputinggroup.org/resource/tpm-library-specification/">thousands of pages of specifications</a> and auxiliary documents will also lead you to another conclusion. TPMs are ridiculously complex.</p>
 <p>TPMs can attest boot state, identify devices, seal secrets, store arbitrarily complex key hierarchies, build authorization Rube Goldberg machines, optionally encrypt/audit/authenticate sessions. Its design is so flexible that in most contexts the term “TPM” is largely replaceable with “magic security pixie dust.”</p>
 <p>I work with these regularly and yes, I’m confused too.</p>
@@ -65,7 +67,7 @@ if (!doNotTrack) {
 </ul>
 <h2 id="tpms-on-linux">TPMs on Linux</h2>
 <p>The Kernel exposes the TPM under <code>/dev/tpm0</code> and <code>/dev/tpmrm0</code>. <code>tpm0</code> provides direct access to the TPM relying on userland to synchronize and load/unload keys, while <code>tpmrm0</code> uses the Kernel’s builtin resource manager. We’ll be using <code>tpmrm0</code> for this post.</p>
-<p>Once we’ve opened a file handle we can use <a href="https://github.com/google/go-tpm">github.com/google/go-tpm</a> to execute TPM commands. Here’s a program that users the TPM as a source of randomness.</p>
+<p>Once we’ve opened a file handle we can use <a href="https://github.com/google/go-tpm">github.com/google/go-tpm</a> to execute TPM commands. Here’s a program that uses the TPM as a source of randomness.</p>
 <pre><code>f, err := os.OpenFile(&quot;/dev/tpmrm0&quot;, os.O_RDWR, 0)
 if err != nil {
         log.Fatalf(&quot;opening tpm: %v&quot;, err)
@@ -298,9 +300,10 @@ ekPub, err := ekTPMPub.Key()
 if err != nil {
         log.Fatalf(&quot;decode ek public key: %v&quot;, err)
 }
-</code></pre><p>The certificate authority now uses this information to generate a challenge. This is also a chance to check public key attributes and reject any AIKs that don’t meet our requirements. For example, we likely want to throw out keys that don’t use FlagFixedTPM or FlagSensitiveDataOrigin since they can be imported or exported.</p>
+</code></pre><p>The challenge asks the EK to verify another key name is also loaded into the TPM. Because key names are digests of the public key blob, the certificate authority can verify public key attributes and reject any that don’t match expectations. For example, we likely want to throw out keys that don’t use FlagFixedTPM or FlagSensitiveDataOrigin since they can be imported or exported.</p>
 <p>Included in the encrypted blob is a secret that the certificate authority tracks with the challenge.</p>
-<pre><code>name, err := tpm2.DecodeName(bytes.NewBuffer(nameData))
+<pre><code>// Verify digest matches the public blob that was provided.
+name, err := tpm2.DecodeName(bytes.NewBuffer(nameData))
 if err != nil {
         log.Fatalf(&quot;unpacking name: %v&quot;, err)
 }
@@ -315,13 +318,17 @@ pubHash := h.New()
 pubHash.Write(pubBlob)
 pubDigest := pubHash.Sum(nil)
 if !bytes.Equal(name.Digest.Value, pubDigest) {
-        log.Fatalf(&quot;attestation was not for public blob&quot;)
+        log.Fatalf(&quot;name was not for public blob&quot;)
 }
+
+// Inspect key attributes.
 pub, err := tpm2.DecodePublic(pubBlob)
 if err != nil {
         log.Fatalf(&quot;decode public blob: %v&quot;, err)
 }
 fmt.Printf(&quot;Key attributes: 0x08%x\n&quot;, pub.Attributes)
+
+// Generate a challenge for the name.
 secret := []byte(&quot;The quick brown fox jumps over the lazy dog&quot;)
 symBlockSize := 16
 credBlob, encSecret, err := credactivation.Generate(name.Digest, ekPub, symBlockSize, secret)
@@ -411,6 +418,8 @@ appKey, _, err := tpm2.Load(f, srk, &quot;&quot;, pubBlob, privBlob)
 if err != nil {
         log.Fatalf(&quot;load app key: %v&quot;, err)
 }
+
+// Write key context to disk.
 appKeyCtx, err := tpm2.ContextSave(f, appKey)
 if err != nil {
         log.Fatalf(&quot;saving context: %v&quot;, err)
@@ -441,16 +450,18 @@ if !ok {
 if len(sigData) != 64 {
         log.Fatalf(&quot;expected ecdsa signature&quot;)
 }
-
-digest := sha256.Sum256(attestData)
 var r, s big.Int
 r.SetBytes(sigData[:len(sigData)/2])
 s.SetBytes(sigData[len(sigData)/2:])
+
+// Verify attested data is signed by the EK public key.
+digest := sha256.Sum256(attestData)
 if !ecdsa.Verify(aikECDSAPub, digest[:], &amp;r, &amp;s) {
         log.Fatalf(&quot;signature didn't match&quot;)
 }
 </code></pre><p>At this point the attestation data’s signature is correct and can be used to further verify the application key’s public key blob. We then unpack the blob to inspect the attributes of the newly created key.</p>
-<pre><code>a, err := tpm2.DecodeAttestationData(attestData)
+<pre><code>// Verify the signed attestation was for this public blob.
+a, err := tpm2.DecodeAttestationData(attestData)
 if err != nil {
         log.Fatalf(&quot;decode attestation: %v&quot;, err)
 }
@@ -458,6 +469,8 @@ pubDigest := sha256.Sum256(pubBlob)
 if !bytes.Equal(a.AttestedCreationInfo.Name.Digest.Value, pubDigest[:]) {
         log.Fatalf(&quot;attestation was not for public blob&quot;)
 }
+
+// Decode public key and inspect key attributes.
 tpmPub, err := tpm2.DecodePublic(pubBlob)
 if err != nil {
         log.Fatalf(&quot;decode public blob: %v&quot;, err)
@@ -561,7 +574,7 @@ if !ecdsa.VerifyASN1(pub, digest[:], sig) {
 <h2 id="whats-next">What’s next?</h2>
 <p>So what next?</p>
 <p>The bad news is, there’s an entire set of features for state attestation we haven’t covered in this post. The good news is, those features aren’t as useful without attesting that you’re communicating with the correct TPM. Even if you never run an application that requires hardware backed keys, you’ll need to set up a similar hierarchy to do boot integrity checks.</p>
-<p>TPMs are in a unique position to provide security assurances that technologies further up the stack can’t. While they continue to be extremely complicated, hopefully these examples make it a little easier to get some value out of these devices.</p>
+<p>At the very least, key attestation can prove that a private key is bound to a specific TPM and can’t be exported. With a little bit of copypasta, this can be used to identify devices and guarantee keys are generated securely.</p>
 
 </main>
 
