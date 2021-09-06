@@ -167,6 +167,21 @@ eric_chiang_m@cloudshell:~$
   
   
   </footer>
+    <script>
+	  document.querySelectorAll("h2, h3, h4, h5, h6").forEach(function(node) {
+if (node.id === "") {
+  return;
+}
+let a = document.createElement("a");
+let img = document.createElement("img");
+img.src = "/img/link.svg";
+img.className = "header-link";
+a.href = "#" + node.id;
+a.append(img);
+node.append(a);
+
+	  });
+    </script>
   </body>
 </html>
 

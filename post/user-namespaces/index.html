@@ -98,7 +98,7 @@ cat: /etc/shadow: Permission denied
 <h2 id="use-in-practice">Use in practice</h2>
 <p>In practice, user namespaces are largely used for unprivileged management of namespaces.</p>
 <p><a href="https://flatpak.org/">Flatpak</a>, a tool for running containerized desktop applications, allows unprivileged users to run containers by leveraging user namespaces to create the application’s sandbox. Flatpak’s runtime <a href="https://github.com/projectatomic/bubblewrap">bubblewrap</a> is also used by projects like GNOME Desktop to isolate risky processes.</p>
-<p>Running containers in containers also benefits from user namespace. Docker and other runtimes heavily restrict containerized process capabilities to prevent escapes, and these restrictions prohibit running <code>docker build</code> inside a container. Project’s like Jess Frazelle’s <a href="https://github.com/genuinetools/img">img</a> get around this by using user namespaces to support <code>Dockerfile` </code>RUN` commands.</p>
+<p>Running containers in containers also benefits from user namespace. Docker and other runtimes heavily restrict containerized process capabilities to prevent escapes, and these restrictions prohibit running <code>docker build</code> inside a container. Project’s like Jess Frazelle’s <a href="https://github.com/genuinetools/img">img</a> get around this by using user namespaces to support <code>Dockerfile</code> <code>RUN</code> commands.</p>
 <h2 id="user-namespace-security">User namespace security</h2>
 <p>User namespaces are notorious for privilege escalation bugs because they expose root capabilities to unprivileged users. This can cause issues with kernel code that doesn’t account for mapped PIDs/GIDs (<a href="https://nvd.nist.gov/vuln/detail/CVE-2014-4014">CVE-2014-4014</a>, <a href="https://nvd.nist.gov/vuln/detail/CVE-2009-1338">CVE-2009-1338</a>), or allow bugs that would only be exploitable by root to be reachable by other processes (<a href="https://nvd.nist.gov/vuln/detail/CVE-2018-18955">CVE-2018-18955</a>, <a href="https://nvd.nist.gov/vuln/detail/CVE-2017-7184">CVE-2017-7184</a>, <a href="https://nvd.nist.gov/vuln/detail/CVE-2016-8655">CVE-2016-8655</a>). Historically, <a href="https://rhelblog.redhat.com/2014/03/31/containers/">RHEL</a> and <a href="https://lwn.net/Articles/673597/">Debian</a> have disabled user namespaces by default and require kernel parameters to use.</p>
 <p><a href="https://twitter.com/jessfraz/status/1095134939161317377">Jess Frazelle noted</a> that the recent runc container escape (<a href="https://nvd.nist.gov/vuln/detail/CVE-2019-5736">CVE-2019-5736</a>) is mitigated by user namespaces. While true, <a href="https://twitter.com/lizrice/status/986652996816855045">not running root in containers</a> is equally valid and probably more realistic for most architectures.</p>
@@ -110,6 +110,21 @@ cat: /etc/shadow: Permission denied
   
   
   </footer>
+    <script>
+	  document.querySelectorAll("h2, h3, h4, h5, h6").forEach(function(node) {
+if (node.id === "") {
+  return;
+}
+let a = document.createElement("a");
+let img = document.createElement("img");
+img.src = "/img/link.svg";
+img.className = "header-link";
+a.href = "#" + node.id;
+a.append(img);
+node.append(a);
+
+	  });
+    </script>
   </body>
 </html>
 

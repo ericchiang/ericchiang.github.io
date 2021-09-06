@@ -65,3 +65,12 @@ table {
 table thead th { border-bottom: 1px solid #ddd; }
 th, td { padding: 5px; }
 thead, tfoot, tr:nth-child(even) { background: #eee }
+
+/* hide header links until hover */
+
+.header-link {
+  opacity: 0;
+}
+.header-link:hover {
+  opacity: 1;
+}

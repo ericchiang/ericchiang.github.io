@@ -45,7 +45,7 @@ if (!doNotTrack) {
 <p>Eric Chiang</p>
 <p>github: <a href="https://github.com/ericchiang">@ericchiang</a><br>
 twitter: <a href="https://twitter.com/erchiang">@erchiang</a><br>
-email: <a href="mailto:eric.chiang.m@gmail.com"><a href="mailto:eric.chiang.m@gmail.com">eric.chiang.m@gmail.com</a></a></p>
+email: <a href="mailto:eric.chiang.m@gmail.com">eric.chiang.m@gmail.com</a></p>
 <p>Security engineer.</p>
 <p>Open source projects:</p>
 <ul>
@@ -98,6 +98,21 @@ email: <a href="mailto:eric.chiang.m@gmail.com"><a href="mailto:eric.chiang.m@gm
   
   
   </footer>
+    <script>
+	  document.querySelectorAll("h2, h3, h4, h5, h6").forEach(function(node) {
+if (node.id === "") {
+  return;
+}
+let a = document.createElement("a");
+let img = document.createElement("img");
+img.src = "/img/link.svg";
+img.className = "header-link";
+a.href = "#" + node.id;
+a.append(img);
+node.append(a);
+
+	  });
+    </script>
   </body>
 </html>
 

@@ -43,14 +43,14 @@ if (!doNotTrack) {
 
 <main>
 <p><!-- raw HTML omitted -->Just want to jump into the GitHub project? <a href="https://github.com/ericchiang/letsencrypt">Click here</a>.<!-- raw HTML omitted --></p>
-<p>If you haven't heard, <a href="https://letsencrypt.org/">Let's Encrypt</a> is trying to secure the internet with automated and free TLS certificates.</p>
-<p>In preperation for the Public Beta in December, I've written a simple client in Go which you can go get on <a href="https://github.com/ericchiang/letsencrypt">GitHub</a>. This post uses that client to take you through the workflow of signing up, completing challenges, and requesting certificates. Let's Encrypt!</p>
-<p>For these examples, I've spun up a <a href="https://github.com/letsencrypt/boulder">Let's Encrypt server</a> in dev mode on my local machine, made some edits to the server's configuration, and added an entry to my <code>/etc/hosts</code>. See details <a href="https://github.com/ericchiang/letsencrypt#running-the-tests">here</a> if you want to follow along.</p>
+<p>If you haven&rsquo;t heard, <a href="https://letsencrypt.org/">Let&rsquo;s Encrypt</a> is trying to secure the internet with automated and free TLS certificates.</p>
+<p>In preperation for the Public Beta in December, I&rsquo;ve written a simple client in Go which you can go get on <a href="https://github.com/ericchiang/letsencrypt">GitHub</a>. This post uses that client to take you through the workflow of signing up, completing challenges, and requesting certificates. Let&rsquo;s Encrypt!</p>
+<p>For these examples, I&rsquo;ve spun up a <a href="https://github.com/letsencrypt/boulder">Let&rsquo;s Encrypt server</a> in dev mode on my local machine, made some edits to the server&rsquo;s configuration, and added an entry to my <code>/etc/hosts</code>. See details <a href="https://github.com/ericchiang/letsencrypt#running-the-tests">here</a> if you want to follow along.</p>
 <h2 id="step-1-registration">Step 1: Registration</h2>
 <p>To start the client registers a key pair with the server, then uses the private key to sign all future messages and confirm its identity.</p>
-<p>First let's generate a key pair for our account.</p>
+<p>First let&rsquo;s generate a key pair for our account.</p>
 <pre><code class="language-nohighlight" data-lang="nohighlight">ssh-keygen -t rsa -b 4096 -C &quot;your_email@example.com&quot; -f letsencrypt -N ''
-</code></pre><p>Then we'll load the private key and register it with the server.</p>
+</code></pre><p>Then we&rsquo;ll load the private key and register it with the server.</p>
 <pre><code>package main
 
 import (
@@ -93,8 +93,8 @@ func loadKey(file string) (*rsa.PrivateKey, error) {
 <pre><code class="language-nohighlight" data-lang="nohighlight">$ go run step1.go
 Registration successful!
 </code></pre><h2 id="step-2-requesting-challenges">Step 2: Requesting challenges</h2>
-<p>Once we've registered a key pair the next step is to begin a challenge for a specific domain. In this case we'll be asking for the DNS name <code>example.org</code>.</p>
-<p>The server responds to an authorization request with a list of challenges supported for that domain and a list of combinations of challenges to perform. We'll print the response and take a look at the results.</p>
+<p>Once we&rsquo;ve registered a key pair the next step is to begin a challenge for a specific domain. In this case we&rsquo;ll be asking for the DNS name <code>example.org</code>.</p>
+<p>The server responds to an authorization request with a list of challenges supported for that domain and a list of combinations of challenges to perform. We&rsquo;ll print the response and take a look at the results.</p>
 <pre><code>auth, _, err := cli.NewAuthorization(key, &quot;dns&quot;, &quot;example.org&quot;)
 if err != nil {
 	log.Fatal(err)
@@ -123,8 +123,8 @@ Combinations:
 <p>Since <code>simpleHttp</code> and <code>dvsni</code> are depricated we care about <code>http-01</code> and <code>tls-sni-01</code>. The first is a challenge to provision an HTTP response at a given path for the domain, the second requires some trickery with TLS Server Name Identification.</p>
 <p>The <code>Combinations</code> field displays the set of challenges a client can complete to prove ownership over a domain. In this case, completing any of the challenges is enough.</p>
 <h2 id="step-3-complete-a-challenge">Step 3: Complete a challenge</h2>
-<p>The server has now challenged us to provision either an HTTP or TLS resource. It's our turn to do so then inform the server we're ready.</p>
-<p>Let's take a look at the HTTP challenge.</p>
+<p>The server has now challenged us to provision either an HTTP or TLS resource. It&rsquo;s our turn to do so then inform the server we&rsquo;re ready.</p>
+<p>Let&rsquo;s take a look at the HTTP challenge.</p>
 <pre><code>// grab the HTTP challenge again
 httpChalURL := &quot;http://127.0.0.1:4000/acme/challenge/aOOnrY65LHMSYK6HftGeK795dqEII40NYGVESqqKmGA/3&quot;
 chal, err := cli.Challenge(httpChalURL)
@@ -155,8 +155,8 @@ fmt.Println(&quot;Resource:&quot;, resource)
 }
 Path:     /.well-known/acme-challenge/1UMQfJKJWZwOmisxPTso_nR9tEP_42PHsq3EcibGbtE
 Resource: 1UMQfJKJWZwOmisxPTso_nR9tEP_42PHsq3EcibGbtE.wF6w7g9k8byiDJcjhwNpLP883uGpxGZL0NdPTEy5PSc
-</code></pre><p>As you can see the server has returned a challenge of type <code>http-01</code> and a token. <a href="https://tools.ietf.org/html/draft-ietf-acme-acme-01#section-7.2">The spec</a> documents how to combine that token with the client's private key into a URL path and a HTTP response.</p>
-<p>To actually serve the file, we'll need to spin up a HTTP server on the domain we've requested. We then notify the server that the challenge is ready for verification, and poll the challenge until we get a result.</p>
+</code></pre><p>As you can see the server has returned a challenge of type <code>http-01</code> and a token. <a href="https://tools.ietf.org/html/draft-ietf-acme-acme-01#section-7.2">The spec</a> documents how to combine that token with the client&rsquo;s private key into a URL path and a HTTP response.</p>
+<p>To actually serve the file, we&rsquo;ll need to spin up a HTTP server on the domain we&rsquo;ve requested. We then notify the server that the challenge is ready for verification, and poll the challenge until we get a result.</p>
 <pre><code>go func() {
 	// serve the resource at the given path
 	http.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
@@ -173,13 +173,13 @@ if err := cli.ChallengeReady(key, chal); err != nil {
 fmt.Println(&quot;You've completed the challenge!&quot;)
 </code></pre><pre><code class="language-nohighlight" data-lang="nohighlight">$ go run step3.go 
 You've completed the challenge!
-</code></pre><p>And that's it. We've provisioned the resource, the server checked that it was there, and the challenge has been verified.</p>
+</code></pre><p>And that&rsquo;s it. We&rsquo;ve provisioned the resource, the server checked that it was there, and the challenge has been verified.</p>
 <p>For examples of completing other challenges, see the <a href="https://github.com/ericchiang/letsencrypt#challenges">README</a>.</p>
 <h2 id="step-4-getting-a-certificate">Step 4: Getting a certificate</h2>
-<p>Once we've completed a set of combinations, the server will finally issue us a certificate. This comes in two steps.</p>
+<p>Once we&rsquo;ve completed a set of combinations, the server will finally issue us a certificate. This comes in two steps.</p>
 <p>First, the client generates a certificate request. This holds information like which domain we want a certificate for, what public key it will use, and what algorithms the server should use to sign it. Second, we send the certificate request to server and (if all goes well) it will respond with a certificate.</p>
 <h3 id="step-41-creating-a-certificate-request">Step 4.1: Creating a certificate request</h3>
-<p>You can use tools like <code>openssl</code> to generate these request. But since we're talking Go, here's how you make one using the standard library.</p>
+<p>You can use tools like <code>openssl</code> to generate these request. But since we&rsquo;re talking Go, here&rsquo;s how you make one using the standard library.</p>
 <pre><code>package main
 
 import (
@@ -220,7 +220,7 @@ func main() {
 }
 </code></pre><p>Running this will create <code>example.org.csr</code> and <code>example.org.key</code>.</p>
 <h3 id="step-42-requesting-a-certificate">Step 4.2: Requesting a certificate</h3>
-<p>Finally we sign the certificate request using our account's key (not the one used to generate the request) and send it to the server. Since the account associated with the key has completed the challenges for the domain we've requested, it should issue us a certificate.</p>
+<p>Finally we sign the certificate request using our account&rsquo;s key (not the one used to generate the request) and send it to the server. Since the account associated with the key has completed the challenges for the domain we&rsquo;ve requested, it should issue us a certificate.</p>
 <pre><code>package main
 
 import (
@@ -309,8 +309,8 @@ IeNqHO/uy/bkmCg=
 -----END CERTIFICATE-----
 </code></pre><p>Holy moley, it worked.</p>
 <h2 id="conclusion">Conclusion</h2>
-<p>This Go client isn't a &ldquo;one click TLS&rdquo; tool like Let's Encrypt's existing <a href="https://github.com/letsencrypt/letsencrypt">command line application</a>, but hopefully provides building blocks for similar Go programs. It should also give users the tooling to deal with challenges in custom ways, particularly for those with existing websites that they wish to secure.</p>
-<p>The <a href="https://letsencrypt.org/2015/11/12/public-beta-timing.html">upcoming Public Beta</a> on December 3rd will be a huge step for the Let's Encrypt project and hopefully make HTTPS easier and easier for everyone. Even if you never use the Go package, go check them out!</p>
+<p>This Go client isn&rsquo;t a &ldquo;one click TLS&rdquo; tool like Let&rsquo;s Encrypt&rsquo;s existing <a href="https://github.com/letsencrypt/letsencrypt">command line application</a>, but hopefully provides building blocks for similar Go programs. It should also give users the tooling to deal with challenges in custom ways, particularly for those with existing websites that they wish to secure.</p>
+<p>The <a href="https://letsencrypt.org/2015/11/12/public-beta-timing.html">upcoming Public Beta</a> on December 3rd will be a huge step for the Let&rsquo;s Encrypt project and hopefully make HTTPS easier and easier for everyone. Even if you never use the Go package, go check them out!</p>
 
 </main>
 
@@ -318,6 +318,21 @@ IeNqHO/uy/bkmCg=
   
   
   </footer>
+    <script>
+	  document.querySelectorAll("h2, h3, h4, h5, h6").forEach(function(node) {
+if (node.id === "") {
+  return;
+}
+let a = document.createElement("a");
+let img = document.createElement("img");
+img.src = "/img/link.svg";
+img.className = "header-link";
+a.href = "#" + node.id;
+a.append(img);
+node.append(a);
+
+	  });
+    </script>
   </body>
 </html>
 
