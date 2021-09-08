@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en-us">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>The Rust Borrow Checker | posts</title>
+    <link rel="stylesheet" href="/css/style.css" />
+    <link rel="stylesheet" href="/css/fonts.css" />
+    
+    
+<script type="application/javascript">
+var doNotTrack = false;
+if (!doNotTrack) {
+	window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;
+	ga('create', 'UA-64244584-1', 'auto');
+	
+	ga('send', 'pageview');
+}
+</script>
+<script async src='https://www.google-analytics.com/analytics.js'></script>
+
+  </head>
+
+  <body>
+    <nav>
+    <ul class="menu">
+      
+      <li><a href="/">posts</a></li>
+      
+      <li><a href="/about/">about</a></li>
+      
+      <li><a href="/license/">license</a></li>
+      
+    </ul>
+    <hr/>
+    </nav>
+
+<div class="article-meta">
+<h1><span class="title">The Rust Borrow Checker</span></h1>
+
+<h2 class="date">2021/09/07</h2>
+</div>
+
+<main>
+<p>I’ve been having fun with Rust lately.</p>
+<p>Rust is notoriously difficult, but at some point it clicks and starts to look like any language: structs and methods. Except you don’t have to worry about a bad <code>free()</code> causing a vulnerability, or basic string operation segfaulting.</p>
+<p>Success with Rust’s <a href="https://doc.rust-lang.org/book/ch04-00-understanding-ownership.html">memory model</a> depends on understanding a few core concepts, and this post will go over references (and when to avoid them).</p>
+<p>My first mistake was to think of references (<code>&amp;T</code>) as pointers. While they’re related, there’s many cases where you’d use a pointer in other languages but shouldn’t use a reference. Rust even has a non-reference type (<a href="https://doc.rust-lang.org/std/boxed/struct.Box.html">Box</a>) that represents a pointer.</p>
+<p>If you don’t have a local Rust install, everything in this post runs in the <a href="https://play.rust-lang.org/">Rust Playground</a>.</p>
+<h2 id="owned-variables">Owned variables</h2>
+<p>Regular variables in Rust are “owned.” They’re single-assignment, and if reassigned or used as an argument, they “move” and can’t be used after. In this case, once we call <code>say_hello</code>, we transfer ownership of <code>g</code> to that function, and can’t reference it again.</p>
+<pre><code>struct Greeter {
+    name: String,
+}
+
+impl Greeter {
+    fn new() -&gt; Self {
+        Self {
+            name: &quot;Rust&quot;.to_string(),
+        }
+    }
+    fn greeting(self) -&gt; String {
+        format!(&quot;Hello, {}!&quot;, self.name)
+    }
+}
+
+fn say_hello(g: Greeter) {
+    println!(&quot;{}&quot;, g.greeting());
+}
+
+fn main() {
+    // &quot;g&quot; is an &quot;owned&quot; value.
+    let g = Greeter::new();
+    say_hello(g); // &quot;g&quot; is moved here. Can no longer be accessed.
+}
+</code></pre><p>When composing structs or returning values, default to owned variables rather than references. You can take references later, but can’t turn a referenced variable into an owned one.</p>
+<pre><code>use std::fs;
+use std::net;
+
+// This code uses owned variables, rather than references.
+fn new_session() -&gt; Session {
+	Session { /* ... */ }
+}
+struct Session {
+    // ...
+}
+struct Logger {
+    out: fs::File,
+}
+struct Server {
+    stream: net::TcpStream,
+    sessions: Vec&lt;Session&gt;,
+    logger: Logger,
+}
+</code></pre><h2 id="references">References</h2>
+<p>Instead of moving a variable, we can let functions “borrow” it with a reference. Unlike C, <code>&amp;T</code> is the syntax for creating a reference and a reference type. Functions that receive a reference use <code>fn foo(&amp;T)</code> not <code>fn foo(*T)</code>.</p>
+<p>We’ll change the <code>greeting()</code> function to take a reference, and can then call <code>say_hello()</code> without moving the variable.</p>
+<pre><code>​​struct Greeter {
+    name: String,
+}
+
+impl Greeter {
+    fn new() -&gt; Self {
+        Self {
+            name: &quot;Rust&quot;.to_string(),
+        }
+    }
+    fn greeting(&amp;self) -&gt; String {
+        format!(&quot;Hello, {}!&quot;, self.name)
+    }
+}
+
+fn say_hello(g: &amp;Greeter) {
+    println!(&quot;{}&quot;, g.greeting());
+}
+
+fn main() {
+    // &quot;g&quot; is an &quot;owned&quot; value.
+    let g = Greeter::new();
+    say_hello(&amp;g); // No move, &quot;g&quot; is now borrowed.
+    say_hello(&amp;g)
+}
+</code></pre><p>Variables and references are immutable by default. To make them mutable, they must be annotated as <code>mut T</code>. The calling code doesn’t change, but because of the <code>&amp;mut self</code> receiver, <code>set_name()</code> can now modify struct fields on <code>Greeter</code>.</p>
+<pre><code>struct Greeter {
+    name: String,
+}
+
+impl Greeter {
+    fn new() -&gt; Self {
+        Self {
+            name: &quot;Rust&quot;.to_string(),
+        }
+    }
+    fn greeting(&amp;self) -&gt; String {
+        format!(&quot;Hello, {}!&quot;, self.name)
+    }
+    fn set_name(&amp;mut self, name: String) {
+        self.name = name;
+    }
+}
+
+fn main() {
+    // &quot;g&quot; is an &quot;owned&quot; value.
+    let mut g = Greeter::new();
+    println!(&quot;{}&quot;, g.greeting());
+    g.set_name(&quot;Borrower&quot;.to_string());
+    println!(&quot;{}&quot;, g.greeting());
+}
+</code></pre><h2 id="concurrency">Concurrency</h2>
+<p>Rust shines in concurrent programs, where the compiler guarantees safety based on references and mutability.</p>
+<p>Because <code>greeting()</code> takes an immutable reference, Rust knows threads can call the function simultaneously without synchronizing.</p>
+<pre><code>use lazy_static::lazy_static;
+use std::thread;
+
+lazy_static! {
+    // Global &quot;Greeter&quot; instance.
+    static ref GREETER: Greeter = Greeter::new();
+}
+
+struct Greeter {
+    name: String,
+}
+
+impl Greeter {
+    fn new() -&gt; Self {
+        Self {
+            name: &quot;Rust&quot;.to_string(),
+        }
+    }
+    fn greeting(&amp;self) -&gt; String {
+        format!(&quot;Hello, {}!&quot;, self.name)
+    }
+}
+
+fn main() {
+    let mut threads = Vec::new();
+    for _ in 0..10 {
+        threads.push(thread::spawn(move || {
+            println!(&quot;{}&quot;, GREETER.greeting()); // No locking required.
+        }));
+    }
+    for t in threads {
+        t.join().unwrap();
+    }
+}
+</code></pre><p>Only one thread can hold a mutable reference at once, so for multiple threads to <code>set_name</code>, we’ll need a locking primitive. In this case, we’ll use a mutex and lock in each thread.</p>
+<pre><code>use lazy_static::lazy_static;
+use std::sync;
+use std::thread;
+
+lazy_static! {
+    // Global &quot;Greeter&quot; instance guarded by a mutex.
+    static ref GREETER: sync::Mutex&lt;Greeter&gt; = sync::Mutex::new(Greeter::new());
+}
+
+struct Greeter {
+    name: String,
+}
+
+impl Greeter {
+    fn new() -&gt; Self {
+        Self {
+            name: &quot;Rust&quot;.to_string(),
+        }
+    }
+    fn set_name(&amp;mut self, name: String) {
+        self.name = name
+    }
+    fn greeting(&amp;self) -&gt; String {
+        format!(&quot;Hello, {}!&quot;, self.name)
+    }
+}
+
+fn main() {
+    let mut threads = Vec::new();
+    for i in 0..10 {
+        threads.push(thread::spawn(move || {
+            let mut g = GREETER.lock().unwrap();
+            g.set_name(format!(&quot;Thread #{}&quot;, i + 1));
+            println!(&quot;{}&quot;, g.greeting());
+        }));
+    }
+    for t in threads {
+        t.join().unwrap();
+    }
+}
+</code></pre><p>That’s an awesome thing about Rust. Even with threaded code, if it compiles, it’s memory safe.</p>
+
+</main>
+
+  <footer>
+  
+  
+  </footer>
+    <script>
+	  document.querySelectorAll("h2, h3, h4, h5, h6").forEach(function(node) {
+if (node.id === "") {
+  return;
+}
+let a = document.createElement("a");
+let img = document.createElement("img");
+img.src = "/img/link.svg";
+img.className = "header-link";
+a.href = "#" + node.id;
+a.append(img);
+node.append(a);
+
+	  });
+    </script>
+  </body>
+</html>
+
