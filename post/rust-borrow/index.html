@@ -183,7 +183,7 @@ fn main() {
         t.join().unwrap();
     }
 }
-</code></pre><p>Only one thread can hold a mutable reference at once, so for multiple threads to <code>set_name</code>, we’ll need a locking primitive. In this case, we’ll use a mutex and lock in each thread.</p>
+</code></pre><p>Only one thread can hold a mutable reference at once, so for multiple threads to <code>set_name()</code>, we’ll need a locking primitive. In this case, we’ll use a mutex and lock in each thread.</p>
 <pre><code>use lazy_static::lazy_static;
 use std::sync;
 use std::thread;
