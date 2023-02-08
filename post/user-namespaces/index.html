@@ -46,21 +46,21 @@ if (!doNotTrack) {
 <h2 id="namespaces-for-everyone">Namespaces for everyone</h2>
 <p>User namespaces are a way to create unique views of user and group IDs. Unlike <a href="../containers-from-scratch/">other namespaces</a>, they can be created by non-root users and are primarily used by unprivileged processes to access capabilities normally reserved for root.</p>
 <p>The <code>unshare</code> tool can be used to create a user namespace and act as root:</p>
-<pre><code>$ whoami
+<pre tabindex="0"><code>$ whoami
 ericchiang
 $ unshare --map-root-user
 # whoami
 root
 </code></pre><p>Under the hood, <code>unshare</code> is calling <a href="https://linux.die.net/man/2/unshare"><code>unshare(2)</code></a> and <code>fork(2)</code>, modifying the UID and GID mappings files under <code>/proc</code> , then exec’ing a shell:</p>
-<pre><code>$ unshare --map-root-user
+<pre tabindex="0"><code>$ unshare --map-root-user
 # cat /proc/self/uid_map
          0       1000          1
 # cat /proc/self/gid_map
          0       1000          1
 </code></pre><p>The map files are formatted as follows. In the case above, <code>0</code> (root) for the target ID, <code>1000</code> (my PID/GID) for the source ID, and <code>1</code> to only map a single UID and GID:</p>
-<pre><code>[target ID] [source ID] [ID range]
+<pre tabindex="0"><code>[target ID] [source ID] [ID range]
 </code></pre><p>Within a user namespace, a process can run commands as if it was root. For example, an unprivileged user can call <code>chroot</code>:</p>
-<pre><code>$ # create a root file system
+<pre tabindex="0"><code>$ # create a root file system
 $ mkdir rootfs
 $ sudo debootstrap stable rootfs http://deb.debian.org/debian/
 …
@@ -69,7 +69,7 @@ $ unshare --map-root-user chroot rootfs # run without sudo
 bin  boot  dev  etc  home  lib  lib64  media  mnt
 opt  proc  root  run  sbin  srv  sys  tmp  usr  var
 </code></pre><p>Or setup other namespaces and mount filesystems:</p>
-<pre><code>$ # create a user, mount, and PID namespace
+<pre tabindex="0"><code>$ # create a user, mount, and PID namespace
 $ unshare --map-root-user --mount --pid --fork
 # mount -t proc proc $PWD/rootfs/proc
 # chroot rootfs
@@ -78,10 +78,10 @@ $ unshare --map-root-user --mount --pid --fork
       1 ?        00:00:00 bash
       3 ?        00:00:00 ps
 </code></pre><p>But are we root? We certainly have a lot of capabilities:</p>
-<pre><code>$ unshare --map-root-user capsh --print
+<pre tabindex="0"><code>$ unshare --map-root-user capsh --print
 Current: = cap_chown,cap_dac_override,cap_dac_read_search,cap_fowner,cap_fsetid,cap_kill,cap_setgid,cap_setuid,cap_setpcap,cap_linux_immutable,cap_net_bind_service,cap_net_broadcast,cap_net_admin,cap_net_raw,cap_ipc_lock,cap_ipc_owner,cap_sys_module,cap_sys_rawio,cap_sys_chroot,cap_sys_ptrace,cap_sys_pacct,cap_sys_admin,cap_sys_boot,cap_sys_nice,cap_sys_resource,cap_sys_time,cap_sys_tty_config,cap_mknod,cap_lease,cap_audit_write,cap_audit_control,cap_setfcap,cap_mac_override,cap_mac_admin,cap_syslog,cap_wake_alarm,cap_block_suspend,cap_audit_read+ep
 Bounding set =cap_chown,cap_dac_override,cap_dac_read_search,cap_fowner,cap_fsetid,cap_kill,cap_setgid,cap_setuid,cap_setpcap,cap_linux_immutable,cap_net_bind_service,cap_net_broadcast,cap_net_admin,cap_net_raw,cap_ipc_lock,cap_ipc_owner,cap_sys_module,cap_sys_rawio,cap_sys_chroot,cap_sys_ptrace,cap_sys_pacct,cap_sys_admin,cap_sys_boot,cap_sys_nice,cap_sys_resource,cap_sys_time,cap_sys_tty_config,cap_mknod,cap_lease,cap_audit_write,cap_audit_control,cap_setfcap,cap_mac_override,cap_mac_admin,cap_syslog,cap_wake_alarm,cap_block_suspend,cap_audit_read
-Securebits: 00/0x0/1'b0
+Securebits: 00/0x0/1&#39;b0
  secure-noroot: no (unlocked)
  secure-no-suid-fixup: no (unlocked)
  secure-keep-caps: no (unlocked)
@@ -89,10 +89,10 @@ uid=0(root)
 gid=0(root)
 groups=65534(nogroup),65534(nogroup),65534(nogroup),0(root)
 </code></pre><p>The truth is, once the process attempts to interact with a resource outside of the namespace, “real root” restrictions apply. For example, the process can’t listen on a privileged port:</p>
-<pre><code>$ unshare --map-root-user nc -l -p 80
-Can't grab 0.0.0.0:80 with bind : Permission denied
+<pre tabindex="0"><code>$ unshare --map-root-user nc -l -p 80
+Can&#39;t grab 0.0.0.0:80 with bind : Permission denied
 </code></pre><p>Or override host file permissions:</p>
-<pre><code>$ unshare --map-root-user cat /etc/shadow
+<pre tabindex="0"><code>$ unshare --map-root-user cat /etc/shadow
 cat: /etc/shadow: Permission denied
 </code></pre><p>Ultimately, the process is only root in the namespace and host restrictions still apply as if it was running as a normal user.</p>
 <h2 id="use-in-practice">Use in practice</h2>

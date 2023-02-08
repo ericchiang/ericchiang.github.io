@@ -68,19 +68,19 @@ if (!doNotTrack) {
 <h2 id="tpms-on-linux">TPMs on Linux</h2>
 <p>The Kernel exposes the TPM under <code>/dev/tpm0</code> and <code>/dev/tpmrm0</code>. <code>tpm0</code> provides direct access to the TPM relying on userland to synchronize and load/unload keys, while <code>tpmrm0</code> uses the Kernel’s builtin resource manager. We’ll be using <code>tpmrm0</code> for this post.</p>
 <p>Once we’ve opened a file handle we can use <a href="https://github.com/google/go-tpm">github.com/google/go-tpm</a> to execute TPM commands. Here’s a program that uses the TPM as a source of randomness.</p>
-<pre><code>f, err := os.OpenFile(&quot;/dev/tpmrm0&quot;, os.O_RDWR, 0)
+<pre tabindex="0"><code>f, err := os.OpenFile(&#34;/dev/tpmrm0&#34;, os.O_RDWR, 0)
 if err != nil {
-        log.Fatalf(&quot;opening tpm: %v&quot;, err)
+        log.Fatalf(&#34;opening tpm: %v&#34;, err)
 }
 defer f.Close()
 
 out, err := tpm2.GetRandom(f, 16)
 if err != nil {
-        log.Fatalf(&quot;getting random bytes: %v&quot;, err)
+        log.Fatalf(&#34;getting random bytes: %v&#34;, err)
 }
-fmt.Printf(&quot;%x\n&quot;, out)
+fmt.Printf(&#34;%x\n&#34;, out)
 </code></pre><p>On a Cloud Shell this program prints:</p>
-<pre><code>$ go build -o bin/rand rand.go
+<pre tabindex="0"><code>$ go build -o bin/rand rand.go
 $ sudo ./bin/rand
 178815ea4843ea83e7b022fed301bdb4
 $ sudo ./bin/rand
@@ -104,17 +104,17 @@ $ sudo ./bin/rand
 <p>In some cases, TPM manufacturers will sign a certificate for the EK and store it in NVRAM. In rarer scenarios, the device manufacturer will also issue a Platform Certificate, which references the EK Certificate and holds information such as the device serial number. These certificates can be used in combination with the EK to bootstrap trust.</p>
 <p>On GCP, the <a href="https://cloud.google.com/compute/docs/reference/rest/v1/instances/getShieldedInstanceIdentity">getShieldedInstanceIdentity</a> API can be used to fetch the EK Certificate (we’ll leave that for another time).</p>
 <p>Let’s generate an Endorsement Key and store its context to use later:</p>
-<pre><code>f, err := os.OpenFile(&quot;/dev/tpmrm0&quot;, os.O_RDWR, 0)
+<pre tabindex="0"><code>f, err := os.OpenFile(&#34;/dev/tpmrm0&#34;, os.O_RDWR, 0)
 if err != nil {
-        log.Fatalf(&quot;opening tpm: %v&quot;, err)
+        log.Fatalf(&#34;opening tpm: %v&#34;, err)
 }
 defer f.Close()
 
 tmpl := tpm2.Public{
         Type:    tpm2.AlgRSA,
         NameAlg: tpm2.AlgSHA256,
-        Attributes: tpm2.FlagFixedTPM | // Key can't leave the TPM.
-                tpm2.FlagFixedParent | // Key can't change parent.
+        Attributes: tpm2.FlagFixedTPM | // Key can&#39;t leave the TPM.
+                tpm2.FlagFixedParent | // Key can&#39;t change parent.
                 tpm2.FlagSensitiveDataOrigin | // Key created by the TPM (not imported).
                 tpm2.FlagAdminWithPolicy | // Key has an authPolicy.
                 tpm2.FlagRestricted | // Key used for TPM challenges, not general decryption.
@@ -136,27 +136,27 @@ tmpl := tpm2.Public{
         },
 }
 
-ek, pub, err := tpm2.CreatePrimary(f, tpm2.HandleEndorsement, tpm2.PCRSelection{}, &quot;&quot;, &quot;&quot;, tmpl)
+ek, pub, err := tpm2.CreatePrimary(f, tpm2.HandleEndorsement, tpm2.PCRSelection{}, &#34;&#34;, &#34;&#34;, tmpl)
 if err != nil {
-        log.Fatalf(&quot;creating ek: %v&quot;, err)
+        log.Fatalf(&#34;creating ek: %v&#34;, err)
 }
 out, err := tpm2.ContextSave(f, ek)
 if err != nil {
-        log.Fatalf(&quot;saving context: %v&quot;, err)
+        log.Fatalf(&#34;saving context: %v&#34;, err)
 }
-if err := ioutil.WriteFile(&quot;ek.ctx&quot;, out, 0644); err != nil {
-        log.Fatalf(&quot;writing context: %v&quot;, err)
+if err := ioutil.WriteFile(&#34;ek.ctx&#34;, out, 0644); err != nil {
+        log.Fatalf(&#34;writing context: %v&#34;, err)
 }
 
 pubDER, err := x509.MarshalPKIXPublicKey(pub)
 if err != nil {
-        log.Fatalf(&quot;encoding public key: %v&quot;, err)
+        log.Fatalf(&#34;encoding public key: %v&#34;, err)
 }
-b := &amp;pem.Block{Type: &quot;PUBLIC KEY&quot;, Bytes: pubDER}
+b := &amp;pem.Block{Type: &#34;PUBLIC KEY&#34;, Bytes: pubDER}
 pem.Encode(os.Stdout, b)
 </code></pre><p>There are some reasonable template fields, then there’s authPolicy. authPolicy is a hash that represents a sequence of authorizations. To access a key with a policy a session repeats the authorization sequence, causing the session hash to match the authPolicy and granting access to the key. We’ll largely be ignoring sessions and policies (and sticking to empty passwords!), but later on there will be an example of setting up a session to access the EK.</p>
 <p>Because key generation is deterministic, this program will always print the same result on the same device:</p>
-<pre><code>$ go build -o bin/ek ek.go
+<pre tabindex="0"><code>$ go build -o bin/ek ek.go
 $ sudo ./bin/ek
 -----BEGIN PUBLIC KEY-----
 MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA+N1FqzITQPBH4v/cLQdd
@@ -180,20 +180,20 @@ gQIDAQAB
 </code></pre><h3 id="storage-root-key">Storage Root Key</h3>
 <p>For reasons, creating keys under the Endorsement hierarchy can be fidgety, so setups tend to create keys under the Storage hierarchy instead. Endorsement Keys can still attest keys under other hierarchies, so while we’ll generate a Storage Root Key we won’t actually be using it for attestations. The SRK only acts as a parent to other keys.</p>
 <p>This looks familiar to the EK, and has a <a href="https://trustedcomputinggroup.org/wp-content/uploads/TCG-TPM-v2.0-Provisioning-Guidance-Published-v1r1.pdf">similar spec</a> defining the template. But instead of creating the key under “HandleEndorsement” we create it under “HandleOwner” signifying the Storage hierarchy.</p>
-<pre><code>f, err := os.OpenFile(&quot;/dev/tpmrm0&quot;, os.O_RDWR, 0)
+<pre tabindex="0"><code>f, err := os.OpenFile(&#34;/dev/tpmrm0&#34;, os.O_RDWR, 0)
 if err != nil {
-        log.Fatalf(&quot;opening tpm: %v&quot;, err)
+        log.Fatalf(&#34;opening tpm: %v&#34;, err)
 }
 defer f.Close()
 
 tmpl := tpm2.Public{
         Type:    tpm2.AlgRSA,
         NameAlg: tpm2.AlgSHA256,
-        Attributes: tpm2.FlagFixedTPM | // Key can't leave the TPM.
-                tpm2.FlagFixedParent | // Key can't change parent.
+        Attributes: tpm2.FlagFixedTPM | // Key can&#39;t leave the TPM.
+                tpm2.FlagFixedParent | // Key can&#39;t change parent.
                 tpm2.FlagSensitiveDataOrigin | // Key created by the TPM (not imported).
                 tpm2.FlagUserWithAuth | // Uses (empty) password.
-                tpm2.FlagNoDA | // This flag doesn't do anything, but it's in the spec.
+                tpm2.FlagNoDA | // This flag doesn&#39;t do anything, but it&#39;s in the spec.
                 tpm2.FlagRestricted | // Key used for TPM challenges, not general decryption.
                 tpm2.FlagDecrypt, // Key can be used to decrypt data.
         RSAParameters: &amp;tpm2.RSAParams{
@@ -203,16 +203,16 @@ tmpl := tpm2.Public{
         },
 }
 
-srk, _, err := tpm2.CreatePrimary(f, tpm2.HandleOwner, tpm2.PCRSelection{}, &quot;&quot;, &quot;&quot;, tmpl)
+srk, _, err := tpm2.CreatePrimary(f, tpm2.HandleOwner, tpm2.PCRSelection{}, &#34;&#34;, &#34;&#34;, tmpl)
 if err != nil {
-        log.Fatalf(&quot;creating srk: %v&quot;, err)
+        log.Fatalf(&#34;creating srk: %v&#34;, err)
 }
 out, err := tpm2.ContextSave(f, srk)
 if err != nil {
-        log.Fatalf(&quot;saving context: %v&quot;, err)
+        log.Fatalf(&#34;saving context: %v&#34;, err)
 }
-if err := ioutil.WriteFile(&quot;srk.ctx&quot;, out, 0644); err != nil {
-        log.Fatalf(&quot;writing context: %v&quot;, err)
+if err := ioutil.WriteFile(&#34;srk.ctx&#34;, out, 0644); err != nil {
+        log.Fatalf(&#34;writing context: %v&#34;, err)
 }
 </code></pre><h2 id="attesting-keys">Attesting keys</h2>
 <p>While generating keys locally is fine, hardware keys are much more interesting if you can prove that they’re stored in hardware.</p>
@@ -220,36 +220,36 @@ if err := ioutil.WriteFile(&quot;srk.ctx&quot;, out, 0644); err != nil {
 <h3 id="credential-activation">Credential activation</h3>
 <p>For privacy, keys generated from seeds such as the EK and SRK can only decrypt, they <a href="https://trustedcomputinggroup.org/wp-content/uploads/TCG_TPM2_r1p59_Part3_Commands_pub.pdf#page=293">can’t sign</a>. This provides a layer of abstraction between keys that are consistent through a device’s lifecycle, and keys used by general applications.</p>
 <p>Proving a key is on the same TPM as the EK is complicated because EK can’t simply sign an attestation. Instead, we use a challenge and response protocol called Credential Activation where a certificate authority encrypts a secret then asks the EK to decrypt it.</p>
-<p>First, we have to create our Attestestation Identity Key (AIK). This will be a child of the SRK, but we’ll also need the EK for the challenge.</p>
-<pre><code>f, err := os.OpenFile(&quot;/dev/tpmrm0&quot;, os.O_RDWR, 0)
+<p>First, we have to create our Attestation Identity Key (AIK). This will be a child of the SRK, but we’ll also need the EK for the challenge.</p>
+<pre tabindex="0"><code>f, err := os.OpenFile(&#34;/dev/tpmrm0&#34;, os.O_RDWR, 0)
 if err != nil {
-        log.Fatalf(&quot;opening tpm: %v&quot;, err)
+        log.Fatalf(&#34;opening tpm: %v&#34;, err)
 }
 defer f.Close()
 
-srkCtx, err := ioutil.ReadFile(&quot;srk.ctx&quot;)
+srkCtx, err := ioutil.ReadFile(&#34;srk.ctx&#34;)
 if err != nil {
-        log.Fatalf(&quot;read srk: %v&quot;, err)
+        log.Fatalf(&#34;read srk: %v&#34;, err)
 }
 srk, err := tpm2.ContextLoad(f, srkCtx)
 if err != nil {
-        log.Fatalf(&quot;load srk: %v&quot;, err)
+        log.Fatalf(&#34;load srk: %v&#34;, err)
 }
 
-ekCtx, err := ioutil.ReadFile(&quot;ek.ctx&quot;)
+ekCtx, err := ioutil.ReadFile(&#34;ek.ctx&#34;)
 if err != nil {
-        log.Fatalf(&quot;read ek: %v&quot;, err)
+        log.Fatalf(&#34;read ek: %v&#34;, err)
 }
 ek, err := tpm2.ContextLoad(f, ekCtx)
 if err != nil {
-        log.Fatalf(&quot;load ek: %v&quot;, err)
+        log.Fatalf(&#34;load ek: %v&#34;, err)
 }
 
 tmpl := tpm2.Public{
         Type:    tpm2.AlgECC,
         NameAlg: tpm2.AlgSHA256,
-        Attributes: tpm2.FlagFixedTPM | // Key can't leave the TPM.
-                tpm2.FlagFixedParent | // Key can't change parent.
+        Attributes: tpm2.FlagFixedTPM | // Key can&#39;t leave the TPM.
+                tpm2.FlagFixedParent | // Key can&#39;t change parent.
                 tpm2.FlagSensitiveDataOrigin | // Key created by the TPM (not imported).
                 tpm2.FlagRestricted | // Key used to sign TPM messages, not external ones.
                 tpm2.FlagUserWithAuth | // Uses (empty) password.
@@ -269,75 +269,69 @@ tmpl := tpm2.Public{
 <li>The AIK public key blob, which includes content such as the key attributes.</li>
 <li>The AIK name, which is a hash of the public key blob.</li>
 </ul>
-<pre><code>privBlob, pubBlob, _, _, _, err := tpm2.CreateKey(f, srk, tpm2.PCRSelection{}, &quot;&quot;, &quot;&quot;, tmpl)
+<pre tabindex="0"><code>privBlob, pubBlob, _, _, _, err := tpm2.CreateKey(f, srk, tpm2.PCRSelection{}, &#34;&#34;, &#34;&#34;, tmpl)
 if err != nil {
-        log.Fatalf(&quot;create aik: %v&quot;, err)
+        log.Fatalf(&#34;create aik: %v&#34;, err)
 }
-aik, nameData, err := tpm2.Load(f, srk, &quot;&quot;, pubBlob, privBlob)
+aik, nameData, err := tpm2.Load(f, srk, &#34;&#34;, pubBlob, privBlob)
 if err != nil {
-        log.Fatalf(&quot;load aik: %v&quot;, err)
+        log.Fatalf(&#34;load aik: %v&#34;, err)
 }
-// go-tpm currently removes the name size prefix. Add it back.
-// https://github.com/google/go-tpm/issues/230
-nameData = append([]byte{
-        byte(uint16(len(nameData)) &gt;&gt; 8),
-        byte(uint16(len(nameData))),
-}, nameData...)
 
 aikCtx, err := tpm2.ContextSave(f, aik)
 if err != nil {
-        log.Fatalf(&quot;saving context: %v&quot;, err)
+        log.Fatalf(&#34;saving context: %v&#34;, err)
 }
-if err := ioutil.WriteFile(&quot;aik.ctx&quot;, aikCtx, 0644); err != nil {
-        log.Fatalf(&quot;writing context: %v&quot;, err)
+if err := ioutil.WriteFile(&#34;aik.ctx&#34;, aikCtx, 0644); err != nil {
+        log.Fatalf(&#34;writing context: %v&#34;, err)
 }
 
 ekTPMPub, _, _, err := tpm2.ReadPublic(f, ek)
 if err != nil {
-        log.Fatalf(&quot;read ek public: %v&quot;, err)
+        log.Fatalf(&#34;read ek public: %v&#34;, err)
 }
 ekPub, err := ekTPMPub.Key()
 if err != nil {
-        log.Fatalf(&quot;decode ek public key: %v&quot;, err)
+        log.Fatalf(&#34;decode ek public key: %v&#34;, err)
 }
 </code></pre><p>The challenge asks the EK to verify another key name is also loaded into the TPM. Because key names are digests of the public key blob, the certificate authority can verify public key attributes and reject any that don’t match expectations. For example, we likely want to throw out keys that don’t use FlagFixedTPM or FlagSensitiveDataOrigin since they can be imported or exported.</p>
 <p>Included in the encrypted blob is a secret that the certificate authority tracks with the challenge.</p>
-<pre><code>// Verify digest matches the public blob that was provided.
+<pre tabindex="0"><code>// Verify digest matches the public blob that was provided.
 name, err := tpm2.DecodeName(bytes.NewBuffer(nameData))
 if err != nil {
-        log.Fatalf(&quot;unpacking name: %v&quot;, err)
+        log.Fatalf(&#34;unpacking name: %v&#34;, err)
 }
 if name.Digest == nil {
-        log.Fatalf(&quot;name was not a digest&quot;)
+        log.Fatalf(&#34;name was not a digest&#34;)
 }
 h, err := name.Digest.Alg.Hash()
 if err != nil {
-        log.Fatalf(&quot;failed to get name hash: %v&quot;, err)
+        log.Fatalf(&#34;failed to get name hash: %v&#34;, err)
 }
 pubHash := h.New()
 pubHash.Write(pubBlob)
 pubDigest := pubHash.Sum(nil)
 if !bytes.Equal(name.Digest.Value, pubDigest) {
-        log.Fatalf(&quot;name was not for public blob&quot;)
+        log.Fatalf(&#34;name was not for public blob&#34;)
 }
 
 // Inspect key attributes.
 pub, err := tpm2.DecodePublic(pubBlob)
 if err != nil {
-        log.Fatalf(&quot;decode public blob: %v&quot;, err)
+        log.Fatalf(&#34;decode public blob: %v&#34;, err)
 }
-fmt.Printf(&quot;Key attributes: 0x08%x\n&quot;, pub.Attributes)
+fmt.Printf(&#34;Key attributes: 0x08%x\n&#34;, pub.Attributes)
 
 // Generate a challenge for the name.
-secret := []byte(&quot;The quick brown fox jumps over the lazy dog&quot;)
+secret := []byte(&#34;The quick brown fox jumps over the lazy dog&#34;)
 symBlockSize := 16
 credBlob, encSecret, err := credactivation.Generate(name.Digest, ekPub, symBlockSize, secret)
 if err != nil {
-        log.Fatalf(&quot;generate credential: %v&quot;, err)
+        log.Fatalf(&#34;generate credential: %v&#34;, err)
 }
 </code></pre><p>The EK passes the challenge by returning the decrypted secret to the certificate authority. During this process, it verifies the named credential is bound to the same TPM.</p>
 <p>Because our EK uses an authPolicy, we have to configure a session and authenticate in order to use it. In this case the policy is generated by <code>TPM2_PolicySecret(TPM_RH_ENDORSEMENT)</code>, so we execute the same command to match the digest.</p>
-<pre><code>session, _, err := tpm2.StartAuthSession(f,
+<pre tabindex="0"><code>session, _, err := tpm2.StartAuthSession(f,
         tpm2.HandleNull,
         tpm2.HandleNull,
         make([]byte, 16),
@@ -346,57 +340,57 @@ if err != nil {
         tpm2.AlgNull,
         tpm2.AlgSHA256)
 if err != nil {
-        log.Fatalf(&quot;creating auth session: %v&quot;, err)
+        log.Fatalf(&#34;creating auth session: %v&#34;, err)
 }
 
 auth := tpm2.AuthCommand{Session: tpm2.HandlePasswordSession, Attributes: tpm2.AttrContinueSession}
-if _, err := tpm2.PolicySecret(f, tpm2.HandleEndorsement, auth, session, nil, nil, nil, 0); err != nil {
-        log.Fatalf(&quot;policy secret failed: %v&quot;, err)
+if _, _, err := tpm2.PolicySecret(f, tpm2.HandleEndorsement, auth, session, nil, nil, nil, 0); err != nil {
+        log.Fatalf(&#34;policy secret failed: %v&#34;, err)
 }
 
 auths := []tpm2.AuthCommand{auth, {Session: session, Attributes: tpm2.AttrContinueSession}}
 out, err := tpm2.ActivateCredentialUsingAuth(f, auths, aik, ek, credBlob[2:], encSecret[2:])
 if err != nil {
-        log.Fatalf(&quot;activate credential: %v&quot;, err)
+        log.Fatalf(&#34;activate credential: %v&#34;, err)
 }
-fmt.Printf(&quot;%s\n&quot;, out)
+fmt.Printf(&#34;%s\n&#34;, out)
 </code></pre><p>After a bit of song and dance, this program prints the secret we used in the challenge proving the AIK is resident on the same TPM as the EK:</p>
-<pre><code>$ go build -o bin/aik aik.go
+<pre tabindex="0"><code>$ go build -o bin/aik aik.go
 $ sudo ./bin/aik
 Key attributes: 0x0850072
 The quick brown fox jumps over the lazy dog
 </code></pre><h3 id="credential-certification">Credential certification</h3>
 <p>Credential proofs are easier for keys that can sign, since they can create signatures for attestation events directly. To demonstrate, we’ll create an application key and use the AIK to certify it. For this we’ll need to load the SRK (to act as the parent) and the AIK.</p>
-<pre><code>f, err := os.OpenFile(&quot;/dev/tpmrm0&quot;, os.O_RDWR, 0)
+<pre tabindex="0"><code>f, err := os.OpenFile(&#34;/dev/tpmrm0&#34;, os.O_RDWR, 0)
 if err != nil {
-        log.Fatalf(&quot;opening tpm: %v&quot;, err)
+        log.Fatalf(&#34;opening tpm: %v&#34;, err)
 }
 defer f.Close()
 
-srkCtx, err := ioutil.ReadFile(&quot;srk.ctx&quot;)
+srkCtx, err := ioutil.ReadFile(&#34;srk.ctx&#34;)
 if err != nil {
-        log.Fatalf(&quot;read srk: %v&quot;, err)
+        log.Fatalf(&#34;read srk: %v&#34;, err)
 }
 srk, err := tpm2.ContextLoad(f, srkCtx)
 if err != nil {
-        log.Fatalf(&quot;load srk: %v&quot;, err)
+        log.Fatalf(&#34;load srk: %v&#34;, err)
 }
 
-aikCtx, err := ioutil.ReadFile(&quot;aik.ctx&quot;)
+aikCtx, err := ioutil.ReadFile(&#34;aik.ctx&#34;)
 if err != nil {
-        log.Fatalf(&quot;read aik: %v&quot;, err)
+        log.Fatalf(&#34;read aik: %v&#34;, err)
 }
 aik, err := tpm2.ContextLoad(f, aikCtx)
 if err != nil {
-        log.Fatalf(&quot;load aik: %v&quot;, err)
+        log.Fatalf(&#34;load aik: %v&#34;, err)
 }
 </code></pre><p>This time we’ll generate a key without the “restricted” flag letting it sign arbitrary data.</p>
-<pre><code>// Same as the AIK, but without the &quot;restricted&quot; flag.
+<pre tabindex="0"><code>// Same as the AIK, but without the &#34;restricted&#34; flag.
 tmpl := tpm2.Public{
         Type:    tpm2.AlgECC,
         NameAlg: tpm2.AlgSHA256,
-        Attributes: tpm2.FlagFixedTPM | // Key can't leave the TPM.
-                tpm2.FlagFixedParent | // Key can't change parent.
+        Attributes: tpm2.FlagFixedTPM | // Key can&#39;t leave the TPM.
+                tpm2.FlagFixedParent | // Key can&#39;t change parent.
                 tpm2.FlagSensitiveDataOrigin | // Key created by the TPM (not imported).
                 tpm2.FlagUserWithAuth | // Uses (empty) password.
                 tpm2.FlagSign, // Key can be used to sign data.
@@ -410,45 +404,45 @@ tmpl := tpm2.Public{
         },
 }
 
-privBlob, pubBlob, _, hash, ticket, err := tpm2.CreateKey(f, srk, tpm2.PCRSelection{}, &quot;&quot;, &quot;&quot;, tmpl)
+privBlob, pubBlob, _, hash, ticket, err := tpm2.CreateKey(f, srk, tpm2.PCRSelection{}, &#34;&#34;, &#34;&#34;, tmpl)
 if err != nil {
-        log.Fatalf(&quot;create aik: %v&quot;, err)
+        log.Fatalf(&#34;create aik: %v&#34;, err)
 }
-appKey, _, err := tpm2.Load(f, srk, &quot;&quot;, pubBlob, privBlob)
+appKey, _, err := tpm2.Load(f, srk, &#34;&#34;, pubBlob, privBlob)
 if err != nil {
-        log.Fatalf(&quot;load app key: %v&quot;, err)
+        log.Fatalf(&#34;load app key: %v&#34;, err)
 }
 
 // Write key context to disk.
 appKeyCtx, err := tpm2.ContextSave(f, appKey)
 if err != nil {
-        log.Fatalf(&quot;saving context: %v&quot;, err)
+        log.Fatalf(&#34;saving context: %v&#34;, err)
 }
-if err := ioutil.WriteFile(&quot;app.ctx&quot;, appKeyCtx, 0644); err != nil {
-        log.Fatalf(&quot;writing context: %v&quot;, err)
+if err := ioutil.WriteFile(&#34;app.ctx&#34;, appKeyCtx, 0644); err != nil {
+        log.Fatalf(&#34;writing context: %v&#34;, err)
 }
 </code></pre><p>To certify the new key we call CertifyCreation, passing the AIK as the signing object. This returns an attestation and a signature.</p>
-<pre><code>aikTPMPub, _, _, err := tpm2.ReadPublic(f, aik)
+<pre tabindex="0"><code>aikTPMPub, _, _, err := tpm2.ReadPublic(f, aik)
 if err != nil {
-        log.Fatalf(&quot;read aik pub: %v&quot;, err)
+        log.Fatalf(&#34;read aik pub: %v&#34;, err)
 }
 sigParams := aikTPMPub.ECCParameters.Sign
 aikPub, err := aikTPMPub.Key()
 if err != nil {
-        log.Fatalf(&quot;getting aik public key&quot;)
+        log.Fatalf(&#34;getting aik public key&#34;)
 }
 
-attestData, sigData, err := tpm2.CertifyCreation(f, &quot;&quot;, appKey, aik, nil, hash, *sigParams, ticket)
+attestData, sigData, err := tpm2.CertifyCreation(f, &#34;&#34;, appKey, aik, nil, hash, *sigParams, ticket)
 if err != nil {
-        log.Fatalf(&quot;certify creation: %v&quot;, err)
+        log.Fatalf(&#34;certify creation: %v&#34;, err)
 }
 </code></pre><p>Instead of a challenge and response dance, the certificate authority simply verifies the signature using the AIK’s public key.</p>
-<pre><code>aikECDSAPub, ok := aikPub.(*ecdsa.PublicKey)
+<pre tabindex="0"><code>aikECDSAPub, ok := aikPub.(*ecdsa.PublicKey)
 if !ok {
-        log.Fatalf(&quot;expected ecdsa public key, got: %T&quot;, aikPub)
+        log.Fatalf(&#34;expected ecdsa public key, got: %T&#34;, aikPub)
 }
 if len(sigData) != 64 {
-        log.Fatalf(&quot;expected ecdsa signature&quot;)
+        log.Fatalf(&#34;expected ecdsa signature&#34;)
 }
 var r, s big.Int
 r.SetBytes(sigData[:len(sigData)/2])
@@ -457,37 +451,37 @@ s.SetBytes(sigData[len(sigData)/2:])
 // Verify attested data is signed by the EK public key.
 digest := sha256.Sum256(attestData)
 if !ecdsa.Verify(aikECDSAPub, digest[:], &amp;r, &amp;s) {
-        log.Fatalf(&quot;signature didn't match&quot;)
+        log.Fatalf(&#34;signature didn&#39;t match&#34;)
 }
 </code></pre><p>At this point the attestation data’s signature is correct and can be used to further verify the application key’s public key blob. We then unpack the blob to inspect the attributes of the newly created key.</p>
-<pre><code>// Verify the signed attestation was for this public blob.
+<pre tabindex="0"><code>// Verify the signed attestation was for this public blob.
 a, err := tpm2.DecodeAttestationData(attestData)
 if err != nil {
-        log.Fatalf(&quot;decode attestation: %v&quot;, err)
+        log.Fatalf(&#34;decode attestation: %v&#34;, err)
 }
 pubDigest := sha256.Sum256(pubBlob)
 if !bytes.Equal(a.AttestedCreationInfo.Name.Digest.Value, pubDigest[:]) {
-        log.Fatalf(&quot;attestation was not for public blob&quot;)
+        log.Fatalf(&#34;attestation was not for public blob&#34;)
 }
 
 // Decode public key and inspect key attributes.
 tpmPub, err := tpm2.DecodePublic(pubBlob)
 if err != nil {
-        log.Fatalf(&quot;decode public blob: %v&quot;, err)
+        log.Fatalf(&#34;decode public blob: %v&#34;, err)
 }
 pub, err := tpmPub.Key()
 if err != nil {
-        log.Fatalf(&quot;decode public key: %v&quot;, err)
+        log.Fatalf(&#34;decode public key: %v&#34;, err)
 }
 pubDER, err := x509.MarshalPKIXPublicKey(pub)
 if err != nil {
-        log.Fatalf(&quot;encoding public key: %v&quot;, err)
+        log.Fatalf(&#34;encoding public key: %v&#34;, err)
 }
-b := &amp;pem.Block{Type: &quot;PUBLIC KEY&quot;, Bytes: pubDER}
-fmt.Printf(&quot;Key attributes: 0x%08x\n&quot;, tpmPub.Attributes)
+b := &amp;pem.Block{Type: &#34;PUBLIC KEY&#34;, Bytes: pubDER}
+fmt.Printf(&#34;Key attributes: 0x%08x\n&#34;, tpmPub.Attributes)
 pem.Encode(os.Stdout, b)
 </code></pre><p>This program prints:</p>
-<pre><code>$ go build -o bin/certify certify.go
+<pre tabindex="0"><code>$ go build -o bin/certify certify.go
 $ sudo ./bin/certify
 Key attributes: 0x00040072
 -----BEGIN PUBLIC KEY-----
@@ -497,7 +491,7 @@ XkPamPSsWMK4+1NSWXJn+2QrptMLe/dHfo2g1eI5bAT/mq0eP8oDRgiA4A==
 </code></pre><h2 id="signing">Signing</h2>
 <p><em>Finally</em> after chaining several keys together, we can start using the application key. While you could add additional logic to authenticate a session or verify the algorithm was correct, a simple version of a <a href="https://golang.org/pkg/crypto/#Signer">crypto.Signer</a> calls the Sign method directly and unpacks the result.</p>
 <p>Note that this code won’t work with <a href="https://trustedcomputinggroup.org/wp-content/uploads/TCG_TPM2_r1p59_Part1_Architecture_pub.pdf#page=196">restricted keys</a>, which can only sign messages hashed by the TPM first.</p>
-<pre><code>type signer struct {
+<pre tabindex="0"><code>type signer struct {
         tpm io.ReadWriter
         h   tpmutil.Handle
         pub crypto.PublicKey
@@ -508,9 +502,9 @@ func (s *signer) Public() crypto.PublicKey {
 }
 
 func (s *signer) Sign(r io.Reader, digest []byte, opts crypto.SignerOpts) ([]byte, error) {
-        sig, err := tpm2.Sign(s.tpm, s.h, &quot;&quot;, digest, nil, nil)
+        sig, err := tpm2.Sign(s.tpm, s.h, &#34;&#34;, digest, nil, nil)
         if err != nil {
-                return nil, fmt.Errorf(&quot;signing data: %v&quot;, err)
+                return nil, fmt.Errorf(&#34;signing data: %v&#34;, err)
         }
         if sig.RSA != nil {
                 return sig.RSA.Signature, nil
@@ -521,54 +515,54 @@ func (s *signer) Sign(r io.Reader, digest []byte, opts crypto.SignerOpts) ([]byt
                         S *big.Int
                 }{sig.ECC.R, sig.ECC.S})
         }
-        return nil, fmt.Errorf(&quot;unsupported signature type: %v&quot;, sig.Alg)
+        return nil, fmt.Errorf(&#34;unsupported signature type: %v&#34;, sig.Alg)
 }
 
 func newSigner(tpm io.ReadWriter, h tpmutil.Handle) (*signer, error) {
         tpmPub, _, _, err := tpm2.ReadPublic(tpm, h)
         if err != nil {
-                return nil, fmt.Errorf(&quot;read public blob: %v&quot;, err)
+                return nil, fmt.Errorf(&#34;read public blob: %v&#34;, err)
         }
         pub, err := tpmPub.Key()
         if err != nil {
-                return nil, fmt.Errorf(&quot;decode public key: %v&quot;, err)
+                return nil, fmt.Errorf(&#34;decode public key: %v&#34;, err)
         }
         return &amp;signer{tpm, h, pub}, nil
 }
 </code></pre><p>To show this works we’ll load the key, have the TPM sign a message, and verify the signature against the public key.</p>
-<pre><code>f, err := os.OpenFile(&quot;/dev/tpmrm0&quot;, os.O_RDWR, 0)
+<pre tabindex="0"><code>f, err := os.OpenFile(&#34;/dev/tpmrm0&#34;, os.O_RDWR, 0)
 if err != nil {
-        log.Fatalf(&quot;opening tpm: %v&quot;, err)
+        log.Fatalf(&#34;opening tpm: %v&#34;, err)
 }
 defer f.Close()
 
-keyCtx, err := ioutil.ReadFile(&quot;app.ctx&quot;)
+keyCtx, err := ioutil.ReadFile(&#34;app.ctx&#34;)
 if err != nil {
-        log.Fatalf(&quot;read app key: %v&quot;, err)
+        log.Fatalf(&#34;read app key: %v&#34;, err)
 }
 key, err := tpm2.ContextLoad(f, keyCtx)
 if err != nil {
-        log.Fatalf(&quot;load app key: %v&quot;, err)
+        log.Fatalf(&#34;load app key: %v&#34;, err)
 }
 
 priv, err := newSigner(f, key)
 if err != nil {
-        log.Fatalf(&quot;create signer: %v&quot;, err)
+        log.Fatalf(&#34;create signer: %v&#34;, err)
 }
 
-msg := []byte(&quot;The bourgeois human is a virus on the hard drive of the working robot!&quot;)
+msg := []byte(&#34;The bourgeois human is a virus on the hard drive of the working robot!&#34;)
 digest := sha256.Sum256(msg)
 
 sig, err := priv.Sign(rand.Reader, digest[:], crypto.SHA256)
 if err != nil {
-        log.Fatalf(&quot;signing data: %v&quot;, err)
+        log.Fatalf(&#34;signing data: %v&#34;, err)
 }
 pub, ok := priv.Public().(*ecdsa.PublicKey)
 if !ok {
-        log.Fatalf(&quot;expected ecdsa.PublicKey got: %T&quot;, priv.Public())
+        log.Fatalf(&#34;expected ecdsa.PublicKey got: %T&#34;, priv.Public())
 }
 if !ecdsa.VerifyASN1(pub, digest[:], sig) {
-        log.Fatalf(&quot;failed to verify signature&quot;)
+        log.Fatalf(&#34;failed to verify signature&#34;)
 }
 </code></pre><p>Success!</p>
 <h2 id="whats-next">What’s next?</h2>

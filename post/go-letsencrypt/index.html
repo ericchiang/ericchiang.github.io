@@ -49,32 +49,32 @@ if (!doNotTrack) {
 <h2 id="step-1-registration">Step 1: Registration</h2>
 <p>To start the client registers a key pair with the server, then uses the private key to sign all future messages and confirm its identity.</p>
 <p>First let&rsquo;s generate a key pair for our account.</p>
-<pre><code class="language-nohighlight" data-lang="nohighlight">ssh-keygen -t rsa -b 4096 -C &quot;your_email@example.com&quot; -f letsencrypt -N ''
+<pre tabindex="0"><code class="language-nohighlight" data-lang="nohighlight">ssh-keygen -t rsa -b 4096 -C &#34;your_email@example.com&#34; -f letsencrypt -N &#39;&#39;
 </code></pre><p>Then we&rsquo;ll load the private key and register it with the server.</p>
-<pre><code>package main
+<pre tabindex="0"><code>package main
 
 import (
 	// hint, hint: use goimports to fill in the imports
 
-	&quot;github.com/ericchiang/letsencrypt&quot;
+	&#34;github.com/ericchiang/letsencrypt&#34;
 )
 
 func main() {
 	// Create a client.
-	cli, err := letsencrypt.NewClient(&quot;http://localhost:4000/directory&quot;)
+	cli, err := letsencrypt.NewClient(&#34;http://localhost:4000/directory&#34;)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	// Load the private key and register with the ACME server.
-	key, err := loadKey(&quot;letsencrypt&quot;)
+	key, err := loadKey(&#34;letsencrypt&#34;)
 	if err != nil {
 		log.Fatal(err)
 	}
 	if _, err := cli.NewRegistration(key); err != nil {
 		log.Fatal(err)
 	}
-	fmt.Println(&quot;Registration successful!&quot;)
+	fmt.Println(&#34;Registration successful!&#34;)
 }
 
 // loadKey reads and parses a private RSA key.
@@ -85,30 +85,30 @@ func loadKey(file string) (*rsa.PrivateKey, error) {
 	}
 	block, _ := pem.Decode(data)
 	if block == nil {
-		return nil, errors.New(&quot;pem decode: no key found&quot;)
+		return nil, errors.New(&#34;pem decode: no key found&#34;)
 	}
 	return x509.ParsePKCS1PrivateKey(block.Bytes)
 }
 </code></pre><p>Nothing too crazy yet.</p>
-<pre><code class="language-nohighlight" data-lang="nohighlight">$ go run step1.go
+<pre tabindex="0"><code class="language-nohighlight" data-lang="nohighlight">$ go run step1.go
 Registration successful!
 </code></pre><h2 id="step-2-requesting-challenges">Step 2: Requesting challenges</h2>
 <p>Once we&rsquo;ve registered a key pair the next step is to begin a challenge for a specific domain. In this case we&rsquo;ll be asking for the DNS name <code>example.org</code>.</p>
 <p>The server responds to an authorization request with a list of challenges supported for that domain and a list of combinations of challenges to perform. We&rsquo;ll print the response and take a look at the results.</p>
-<pre><code>auth, _, err := cli.NewAuthorization(key, &quot;dns&quot;, &quot;example.org&quot;)
+<pre tabindex="0"><code>auth, _, err := cli.NewAuthorization(key, &#34;dns&#34;, &#34;example.org&#34;)
 if err != nil {
 	log.Fatal(err)
 }
 
-fmt.Println(&quot;Challenges:&quot;)
+fmt.Println(&#34;Challenges:&#34;)
 for _, chal := range auth.Challenges {
 	fmt.Println(chal.Type, chal.URI)
 }
-fmt.Println(&quot;Combinations:&quot;)
+fmt.Println(&#34;Combinations:&#34;)
 for _, comb := range auth.Combs {
 	fmt.Println(comb)
 }
-</code></pre><pre><code class="language-nohighlight" data-lang="nohighlight">$ go run step2.go 
+</code></pre><pre tabindex="0"><code class="language-nohighlight" data-lang="nohighlight">$ go run step2.go 
 Challenges:
 simpleHttp http://127.0.0.1:4000/acme/challenge/aOOnrY65LHMSYK6HftGeK795dqEII40NYGVESqqKmGA/1
 dvsni http://127.0.0.1:4000/acme/challenge/aOOnrY65LHMSYK6HftGeK795dqEII40NYGVESqqKmGA/2
@@ -125,54 +125,54 @@ Combinations:
 <h2 id="step-3-complete-a-challenge">Step 3: Complete a challenge</h2>
 <p>The server has now challenged us to provision either an HTTP or TLS resource. It&rsquo;s our turn to do so then inform the server we&rsquo;re ready.</p>
 <p>Let&rsquo;s take a look at the HTTP challenge.</p>
-<pre><code>// grab the HTTP challenge again
-httpChalURL := &quot;http://127.0.0.1:4000/acme/challenge/aOOnrY65LHMSYK6HftGeK795dqEII40NYGVESqqKmGA/3&quot;
+<pre tabindex="0"><code>// grab the HTTP challenge again
+httpChalURL := &#34;http://127.0.0.1:4000/acme/challenge/aOOnrY65LHMSYK6HftGeK795dqEII40NYGVESqqKmGA/3&#34;
 chal, err := cli.Challenge(httpChalURL)
 if err != nil {
 	log.Fatal(err)
 }
 
 // print the challenge
-out, err := json.MarshalIndent(&amp;chal, &quot;&quot;, &quot;  &quot;)
+out, err := json.MarshalIndent(&amp;chal, &#34;&#34;, &#34;  &#34;)
 if err != nil {
 	log.Fatal(err)
 }
-fmt.Printf(&quot;%s\n&quot;, out)
+fmt.Printf(&#34;%s\n&#34;, out)
 
 // get the challenge details
 path, resource, err := chal.HTTP(key)
 if err != nil {
 	log.Fatal(err)
 }
-fmt.Println(&quot;Path:    &quot;, path)
-fmt.Println(&quot;Resource:&quot;, resource)
-</code></pre><pre><code class="language-nohighlight" data-lang="nohighlight">$ go run step3.go 
+fmt.Println(&#34;Path:    &#34;, path)
+fmt.Println(&#34;Resource:&#34;, resource)
+</code></pre><pre tabindex="0"><code class="language-nohighlight" data-lang="nohighlight">$ go run step3.go 
 {
-  &quot;type&quot;: &quot;http-01&quot;,
-  &quot;uri&quot;: &quot;http://127.0.0.1:4000/acme/challenge/aOOnrY65LHMSYK6HftGeK795dqEII40NYGVESqqKmGA/3&quot;,
-  &quot;status&quot;: &quot;pending&quot;,
-  &quot;token&quot;: &quot;1UMQfJKJWZwOmisxPTso_nR9tEP_42PHsq3EcibGbtE&quot;
+  &#34;type&#34;: &#34;http-01&#34;,
+  &#34;uri&#34;: &#34;http://127.0.0.1:4000/acme/challenge/aOOnrY65LHMSYK6HftGeK795dqEII40NYGVESqqKmGA/3&#34;,
+  &#34;status&#34;: &#34;pending&#34;,
+  &#34;token&#34;: &#34;1UMQfJKJWZwOmisxPTso_nR9tEP_42PHsq3EcibGbtE&#34;
 }
 Path:     /.well-known/acme-challenge/1UMQfJKJWZwOmisxPTso_nR9tEP_42PHsq3EcibGbtE
 Resource: 1UMQfJKJWZwOmisxPTso_nR9tEP_42PHsq3EcibGbtE.wF6w7g9k8byiDJcjhwNpLP883uGpxGZL0NdPTEy5PSc
 </code></pre><p>As you can see the server has returned a challenge of type <code>http-01</code> and a token. <a href="https://tools.ietf.org/html/draft-ietf-acme-acme-01#section-7.2">The spec</a> documents how to combine that token with the client&rsquo;s private key into a URL path and a HTTP response.</p>
 <p>To actually serve the file, we&rsquo;ll need to spin up a HTTP server on the domain we&rsquo;ve requested. We then notify the server that the challenge is ready for verification, and poll the challenge until we get a result.</p>
-<pre><code>go func() {
+<pre tabindex="0"><code>go func() {
 	// serve the resource at the given path
 	http.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
 		io.WriteString(w, resource)
 	})
 	// Start the HTTP server.
-	// The test Let's Encrypt server uses port 5002 instead of 80.
-	log.Fatal(http.ListenAndServe(&quot;:5002&quot;, nil))
+	// The test Let&#39;s Encrypt server uses port 5002 instead of 80.
+	log.Fatal(http.ListenAndServe(&#34;:5002&#34;, nil))
 }()
 
 if err := cli.ChallengeReady(key, chal); err != nil {
 	log.Fatal(err)
 }
-fmt.Println(&quot;You've completed the challenge!&quot;)
-</code></pre><pre><code class="language-nohighlight" data-lang="nohighlight">$ go run step3.go 
-You've completed the challenge!
+fmt.Println(&#34;You&#39;ve completed the challenge!&#34;)
+</code></pre><pre tabindex="0"><code class="language-nohighlight" data-lang="nohighlight">$ go run step3.go 
+You&#39;ve completed the challenge!
 </code></pre><p>And that&rsquo;s it. We&rsquo;ve provisioned the resource, the server checked that it was there, and the challenge has been verified.</p>
 <p>For examples of completing other challenges, see the <a href="https://github.com/ericchiang/letsencrypt#challenges">README</a>.</p>
 <h2 id="step-4-getting-a-certificate">Step 4: Getting a certificate</h2>
@@ -180,7 +180,7 @@ You've completed the challenge!
 <p>First, the client generates a certificate request. This holds information like which domain we want a certificate for, what public key it will use, and what algorithms the server should use to sign it. Second, we send the certificate request to server and (if all goes well) it will respond with a certificate.</p>
 <h3 id="step-41-creating-a-certificate-request">Step 4.1: Creating a certificate request</h3>
 <p>You can use tools like <code>openssl</code> to generate these request. But since we&rsquo;re talking Go, here&rsquo;s how you make one using the standard library.</p>
-<pre><code>package main
+<pre tabindex="0"><code>package main
 
 import (
 	// ...
@@ -196,8 +196,8 @@ func main() {
 		SignatureAlgorithm: x509.SHA256WithRSA,
 		PublicKeyAlgorithm: x509.RSA,
 		PublicKey:          &amp;certKey.PublicKey,
-		Subject:            pkix.Name{CommonName: &quot;example.org&quot;},
-		DNSNames:           []string{&quot;example.org&quot;},
+		Subject:            pkix.Name{CommonName: &#34;example.org&#34;},
+		DNSNames:           []string{&#34;example.org&#34;},
 	}
 	csrDER, err := x509.CreateCertificateRequest(rand.Reader, template, certKey)
 	if err != nil {
@@ -208,39 +208,39 @@ func main() {
 		return pem.EncodeToMemory(&amp;pem.Block{Bytes: b, Type: t})
 	}
 
-	keyPEM := pemEncode(x509.MarshalPKCS1PrivateKey(certKey), &quot;RSA PRIVATE KEY&quot;)
-	csrPEM := pemEncode(csrDER, &quot;CERTIFICATE REQUEST&quot;)
+	keyPEM := pemEncode(x509.MarshalPKCS1PrivateKey(certKey), &#34;RSA PRIVATE KEY&#34;)
+	csrPEM := pemEncode(csrDER, &#34;CERTIFICATE REQUEST&#34;)
 
-	if err := ioutil.WriteFile(&quot;example.org.csr&quot;, csrPEM, 0644); err != nil {
+	if err := ioutil.WriteFile(&#34;example.org.csr&#34;, csrPEM, 0644); err != nil {
 		log.Fatal(err)
 	}
-	if err := ioutil.WriteFile(&quot;example.org.key&quot;, keyPEM, 0644); err != nil {
+	if err := ioutil.WriteFile(&#34;example.org.key&#34;, keyPEM, 0644); err != nil {
 		log.Fatal(err)
 	}
 }
 </code></pre><p>Running this will create <code>example.org.csr</code> and <code>example.org.key</code>.</p>
 <h3 id="step-42-requesting-a-certificate">Step 4.2: Requesting a certificate</h3>
 <p>Finally we sign the certificate request using our account&rsquo;s key (not the one used to generate the request) and send it to the server. Since the account associated with the key has completed the challenges for the domain we&rsquo;ve requested, it should issue us a certificate.</p>
-<pre><code>package main
+<pre tabindex="0"><code>package main
 
 import (
 	// ...
 
-	&quot;github.com/ericchiang/letsencrypt&quot;
+	&#34;github.com/ericchiang/letsencrypt&#34;
 )
 
 func main() {
-	cli, err := letsencrypt.NewClient(&quot;http://localhost:4000/directory&quot;)
+	cli, err := letsencrypt.NewClient(&#34;http://localhost:4000/directory&#34;)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	// load the account's private key and the certificate request
-	key, err := loadKey(&quot;letsencrypt&quot;)
+	// load the account&#39;s private key and the certificate request
+	key, err := loadKey(&#34;letsencrypt&#34;)
 	if err != nil {
 		log.Fatal(err)
 	}
-	csr, err := loadCSR(&quot;example.org.csr&quot;)
+	csr, err := loadCSR(&#34;example.org.csr&#34;)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -250,8 +250,8 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	data := pem.EncodeToMemory(&amp;pem.Block{Bytes: cert.Raw, Type: &quot;CERTIFICATE&quot;})
-	if err := ioutil.WriteFile(&quot;example.org.crt&quot;, data, 0644); err != nil {
+	data := pem.EncodeToMemory(&amp;pem.Block{Bytes: cert.Raw, Type: &#34;CERTIFICATE&#34;})
+	if err := ioutil.WriteFile(&#34;example.org.crt&#34;, data, 0644); err != nil {
 		log.Fatal(err)
 	}
 }
@@ -263,7 +263,7 @@ func loadKey(file string) (*rsa.PrivateKey, error) {
 	}
 	block, _ := pem.Decode(data)
 	if block == nil {
-		return nil, errors.New(&quot;pem decode: no key found&quot;)
+		return nil, errors.New(&#34;pem decode: no key found&#34;)
 	}
 	return x509.ParsePKCS1PrivateKey(block.Bytes)
 }
@@ -275,11 +275,11 @@ func loadCSR(file string) (*x509.CertificateRequest, error) {
 	}
 	block, _ := pem.Decode(data)
 	if block == nil {
-		return nil, errors.New(&quot;pem decode: no key found&quot;)
+		return nil, errors.New(&#34;pem decode: no key found&#34;)
 	}
 	return x509.ParseCertificateRequest(block.Bytes)
 }
-</code></pre><pre><code class="language-nohighlight" data-lang="nohighlight">$ go run step4.go 
+</code></pre><pre tabindex="0"><code class="language-nohighlight" data-lang="nohighlight">$ go run step4.go 
 $ cat example.org.crt
 -----BEGIN CERTIFICATE-----
 MIIEVzCCAz+gAwIBAgITAP9Jk5pSbvv6cgNUQrFxf/pzITANBgkqhkiG9w0BAQsF

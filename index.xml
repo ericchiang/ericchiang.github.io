@@ -44,7 +44,7 @@ My first mistake was to think of references (&amp;amp;T) as pointers.</descripti
       
       <guid>https://ericchiang.github.io/post/privileged-containers/</guid>
       <description>Disabling security features Applications that interact with host systems such as network plugins or storage drivers can have issues when run in a container, requesting access that’s been restricted by the kernel. For these cases, container runtimes have an out to disable these security features and let the process access the host. In Kubernetes this is achieved with the “privileged” security context field:
-containers: - name: flannel image: quay.io/coreos/flannel:v0.11.0-amd64 command: - &amp;quot;/opt/bin/flanneld&amp;quot; - &amp;quot;--ip-masq&amp;quot; - &amp;quot;--kube-subnet-mgr&amp;quot; - &amp;quot;--iface=$(POD_IP)&amp;quot; env: - name: POD_IP valueFrom: fieldRef: fieldPath: status.</description>
+containers: - name: flannel image: quay.io/coreos/flannel:v0.11.0-amd64 command: - &amp;#34;/opt/bin/flanneld&amp;#34; - &amp;#34;--ip-masq&amp;#34; - &amp;#34;--kube-subnet-mgr&amp;#34; - &amp;#34;--iface=$(POD_IP)&amp;#34; env: - name: POD_IP valueFrom: fieldRef: fieldPath: status.</description>
     </item>
     
     <item>
@@ -63,7 +63,7 @@ Namespaces for everyone User namespaces are a way to create unique views of user
       <pubDate>Sat, 07 Jan 2017 00:00:00 +0000</pubDate>
       
       <guid>https://ericchiang.github.io/post/containers-from-scratch/</guid>
-      <description>This is write up for talk I gave at CAT BarCamp, an awesome unconference at Portland State University. The talk started with the self-imposed challenge &amp;ldquo;give an intro to containers without Docker or rkt.&amp;quot;
+      <description>This is write up for talk I gave at CAT BarCamp, an awesome unconference at Portland State University. The talk started with the self-imposed challenge &amp;ldquo;give an intro to containers without Docker or rkt.&amp;rdquo;
 Often thought of as cheap VMs, containers are just isolated groups of processes running on a single host. That isolation leverages several underlying technologies built into the Linux kernel: namespaces, cgroups, chroots and lots of terms you&amp;rsquo;ve probably heard before.</description>
     </item>
     
@@ -73,7 +73,8 @@ Often thought of as cheap VMs, containers are just isolated groups of processes 
       <pubDate>Fri, 13 Nov 2015 00:00:00 +0000</pubDate>
       
       <guid>https://ericchiang.github.io/post/go-letsencrypt/</guid>
-      <description>Just want to jump into the GitHub project? Click here.If you haven&amp;rsquo;t heard, Let&amp;rsquo;s Encrypt is trying to secure the internet with automated and free TLS certificates.
+      <description>Just want to jump into the GitHub project? Click here.
+If you haven&amp;rsquo;t heard, Let&amp;rsquo;s Encrypt is trying to secure the internet with automated and free TLS certificates.
 In preperation for the Public Beta in December, I&amp;rsquo;ve written a simple client in Go which you can go get on GitHub. This post uses that client to take you through the workflow of signing up, completing challenges, and requesting certificates. Let&amp;rsquo;s Encrypt!</description>
     </item>
     
@@ -110,9 +111,9 @@ twitter: @erchiang
 email: eric.chiang.m@gmail.com
 Security engineer.
 Open source projects:
- dex: An OpenID Connect server which federates to other IdPs (LDAP, SAML, etc.) go-oidc: OpenID Connect support for golang.org/x/oauth2. pup: Like jq, but for HTML. k8s: A Kubernetes client with two external dependencies.  Posts on other sites:
- Using RBAC, Generally Available in Kubernetes v1.8 - October 27, 2017  Talks:
- Binary Policy with IMA and AppArmor - (video, 33 min) - Linux Security Summit - August, 2019 PKI for Gophers - (video, 36 min) (slides) - GopherCon - July, 2019 Containers from Scratch - (video, 36 min) - CoreOS Fest - May, 2017 Writing Kubernetes Controllers (using Go!</description>
+dex: An OpenID Connect server which federates to other IdPs (LDAP, SAML, etc.) go-oidc: OpenID Connect support for golang.org/x/oauth2. pup: Like jq, but for HTML. k8s: A Kubernetes client with two external dependencies. Posts on other sites:
+Using RBAC, Generally Available in Kubernetes v1.8 - October 27, 2017 Talks:
+Binary Policy with IMA and AppArmor - (video, 33 min) - Linux Security Summit - August, 2019 PKI for Gophers - (video, 36 min) (slides) - GopherCon - July, 2019 Containers from Scratch - (video, 36 min) - CoreOS Fest - May, 2017 Writing Kubernetes Controllers (using Go!</description>
     </item>
     
     <item>
@@ -122,7 +123,7 @@ Open source projects:
       
       <guid>https://ericchiang.github.io/license/</guid>
       <description>All code snippets on this site (ericchiang.github.io) are provided under the following license:
-Creative Commons Legal Code CC0 1.0 Universal CREATIVE COMMONS CORPORATION IS NOT A LAW FIRM AND DOES NOT PROVIDE LEGAL SERVICES. DISTRIBUTION OF THIS DOCUMENT DOES NOT CREATE AN ATTORNEY-CLIENT RELATIONSHIP. CREATIVE COMMONS PROVIDES THIS INFORMATION ON AN &amp;quot;AS-IS&amp;quot; BASIS. CREATIVE COMMONS MAKES NO WARRANTIES REGARDING THE USE OF THIS DOCUMENT OR THE INFORMATION OR WORKS PROVIDED HEREUNDER, AND DISCLAIMS LIABILITY FOR DAMAGES RESULTING FROM THE USE OF THIS DOCUMENT OR THE INFORMATION OR WORKS PROVIDED HEREUNDER.</description>
+Creative Commons Legal Code CC0 1.0 Universal CREATIVE COMMONS CORPORATION IS NOT A LAW FIRM AND DOES NOT PROVIDE LEGAL SERVICES. DISTRIBUTION OF THIS DOCUMENT DOES NOT CREATE AN ATTORNEY-CLIENT RELATIONSHIP. CREATIVE COMMONS PROVIDES THIS INFORMATION ON AN &amp;#34;AS-IS&amp;#34; BASIS. CREATIVE COMMONS MAKES NO WARRANTIES REGARDING THE USE OF THIS DOCUMENT OR THE INFORMATION OR WORKS PROVIDED HEREUNDER, AND DISCLAIMS LIABILITY FOR DAMAGES RESULTING FROM THE USE OF THIS DOCUMENT OR THE INFORMATION OR WORKS PROVIDED HEREUNDER.</description>
     </item>
     
   </channel>
