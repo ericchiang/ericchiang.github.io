@@ -323,7 +323,9 @@ if err != nil {
 fmt.Printf(&#34;Key attributes: 0x08%x\n&#34;, pub.Attributes)
 
 // Generate a challenge for the name.
-secret := []byte(&#34;The quick brown fox jumps over the lazy dog&#34;)
+//
+// Note that some TPMs enforce a maximum secret size of 32 bytes.
+secret := []byte(&#34;Brevity is the soul of wit&#34;)
 symBlockSize := 16
 credBlob, encSecret, err := credactivation.Generate(name.Digest, ekPub, symBlockSize, secret)
 if err != nil {
@@ -358,7 +360,7 @@ fmt.Printf(&#34;%s\n&#34;, out)
 <pre tabindex="0"><code>$ go build -o bin/aik aik.go
 $ sudo ./bin/aik
 Key attributes: 0x0850072
-The quick brown fox jumps over the lazy dog
+Brevity is the soul of wit
 </code></pre><h3 id="credential-certification">Credential certification</h3>
 <p>Credential proofs are easier for keys that can sign, since they can create signatures for attestation events directly. To demonstrate, we’ll create an application key and use the AIK to certify it. For this we’ll need to load the SRK (to act as the parent) and the AIK.</p>
 <pre tabindex="0"><code>f, err := os.OpenFile(&#34;/dev/tpmrm0&#34;, os.O_RDWR, 0)
