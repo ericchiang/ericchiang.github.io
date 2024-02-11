@@ -76,7 +76,7 @@
       <link>https://ericchiang.github.io/about/</link>
       <pubDate>Mon, 01 Jan 0001 00:00:00 +0000</pubDate>
       <guid>https://ericchiang.github.io/about/</guid>
-      <description>Eric Chiang&#xA;github: @ericchiang&#xA;twitter: @erchiang&#xA;email: eric.chiang.m@gmail.com&#xA;Security engineer.&#xA;Open source projects:&#xA;dex: An OpenID Connect server which federates to other IdPs (LDAP, SAML, etc.) go-oidc: OpenID Connect support for golang.org/x/oauth2. pup: Like jq, but for HTML. k8s: A Kubernetes client with two external dependencies. Posts on other sites:&#xA;Using RBAC, Generally Available in Kubernetes v1.8 - October 27, 2017 Talks:&#xA;Binary Policy with IMA and AppArmor - (video, 33 min) - Linux Security Summit - August, 2019 PKI for Gophers - (video, 36 min) (slides) - GopherCon - July, 2019 Containers from Scratch - (video, 36 min) - CoreOS Fest - May, 2017 Writing Kubernetes Controllers (using Go!</description>
+      <description>Eric Chiang&#xA;github: @ericchiang twitter: @erchiang email: eric.chiang.m@gmail.com Software Engineering lead at Google. I have approximate knowledge of many things.&#xA;Talks&#xA;Creating a Culture of Security (pannel) - DASH by DataDog - 2023 Scalable security: how to win friends and not burn out everyone - BSides SF - 2023 The road to BeyondCorp is paved with good intentions - NorthSec - 2022 Binary Policy with IMA and AppArmor - Linux Security Summit - 2019 PKI for Gophers - GopherCon - 2019 Containers from Scratch - CoreOS Fest - 2017 Kubernetes Auth and Access Control - KubeCon Seattle - 2016 Kubernetes Access Control with Dex - CoreOS Fest - 2016 Why is Python so fast?</description>
     </item>
     <item>
       <title>license</title>
