@@ -6,98 +6,70 @@
     <description>Recent content in Posts on posts</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
-    <lastBuildDate>Tue, 07 Sep 2021 00:00:00 +0000</lastBuildDate><atom:link href="https://ericchiang.github.io/post/index.xml" rel="self" type="application/rss+xml" />
+    <lastBuildDate>Tue, 07 Sep 2021 00:00:00 +0000</lastBuildDate>
+    <atom:link href="https://ericchiang.github.io/post/index.xml" rel="self" type="application/rss+xml" />
     <item>
       <title>The Rust Borrow Checker</title>
       <link>https://ericchiang.github.io/post/rust-borrow/</link>
       <pubDate>Tue, 07 Sep 2021 00:00:00 +0000</pubDate>
-      
       <guid>https://ericchiang.github.io/post/rust-borrow/</guid>
-      <description>I’ve been having fun with Rust lately.
-Rust is notoriously difficult, but at some point it clicks and starts to look like any language: structs and methods. Except you don’t have to worry about a bad free() causing a vulnerability, or basic string operation segfaulting.
-Success with Rust’s memory model depends on understanding a few core concepts, and this post will go over references (and when to avoid them).
-My first mistake was to think of references (&amp;amp;T) as pointers.</description>
+      <description>I’ve been having fun with Rust lately.&#xA;Rust is notoriously difficult, but at some point it clicks and starts to look like any language: structs and methods. Except you don’t have to worry about a bad free() causing a vulnerability, or basic string operation segfaulting.&#xA;Success with Rust’s memory model depends on understanding a few core concepts, and this post will go over references (and when to avoid them).&#xA;My first mistake was to think of references (&amp;amp;T) as pointers.</description>
     </item>
-    
     <item>
       <title>The Trusted Platform Module Key Hierarchy</title>
       <link>https://ericchiang.github.io/post/tpm-keys/</link>
       <pubDate>Mon, 04 Jan 2021 00:00:00 +0000</pubDate>
-      
       <guid>https://ericchiang.github.io/post/tpm-keys/</guid>
       <description>The Trusted Platform Module is a security device that sits on a physical motherboard, runs in a CPU trust zone, or is provided by a hypervisor. By functioning below the OS and boot sequence, it provides a trust anchor to verify those systems even if they’ve been compromised. TPMs are required for any device qualified for Windows, underpinning technologies like Windows’ BitLocker, various features in ChromeOS, and Linux’s Integrity Measurement Architecture.</description>
     </item>
-    
     <item>
       <title>Keep it Simple, Stupid</title>
       <link>https://ericchiang.github.io/post/kiss/</link>
       <pubDate>Sun, 05 Jan 2020 00:00:00 +0000</pubDate>
-      
       <guid>https://ericchiang.github.io/post/kiss/</guid>
       <description>Growing up in the Bay Area, I used to go to the Zeum in San Francisco with my parents. Since rebranded as the Children’s Creativity Museum, it’s a space in Yerba Buena Gardens that hosts exhibits catering to kids. By far, my favorite activity was the claymation where I’d get to design characters and shoot short scenes. I figured out how to make a model jump using wires and add a muzzle flash with one frame of red clay.</description>
     </item>
-    
     <item>
       <title>Privileged Containers Aren&#39;t Containers</title>
       <link>https://ericchiang.github.io/post/privileged-containers/</link>
       <pubDate>Mon, 23 Sep 2019 00:00:00 +0000</pubDate>
-      
       <guid>https://ericchiang.github.io/post/privileged-containers/</guid>
-      <description>Disabling security features Applications that interact with host systems such as network plugins or storage drivers can have issues when run in a container, requesting access that’s been restricted by the kernel. For these cases, container runtimes have an out to disable these security features and let the process access the host. In Kubernetes this is achieved with the “privileged” security context field:
-containers: - name: flannel image: quay.io/coreos/flannel:v0.11.0-amd64 command: - &amp;#34;/opt/bin/flanneld&amp;#34; - &amp;#34;--ip-masq&amp;#34; - &amp;#34;--kube-subnet-mgr&amp;#34; - &amp;#34;--iface=$(POD_IP)&amp;#34; env: - name: POD_IP valueFrom: fieldRef: fieldPath: status.</description>
+      <description>Disabling security features Applications that interact with host systems such as network plugins or storage drivers can have issues when run in a container, requesting access that’s been restricted by the kernel. For these cases, container runtimes have an out to disable these security features and let the process access the host. In Kubernetes this is achieved with the “privileged” security context field:&#xA;containers: - name: flannel image: quay.io/coreos/flannel:v0.11.0-amd64 command: - &amp;#34;/opt/bin/flanneld&amp;#34; - &amp;#34;--ip-masq&amp;#34; - &amp;#34;--kube-subnet-mgr&amp;#34; - &amp;#34;--iface=$(POD_IP)&amp;#34; env: - name: POD_IP valueFrom: fieldRef: fieldPath: status.</description>
     </item>
-    
     <item>
       <title>User Namespaces</title>
       <link>https://ericchiang.github.io/post/user-namespaces/</link>
       <pubDate>Wed, 20 Feb 2019 00:00:00 +0000</pubDate>
-      
       <guid>https://ericchiang.github.io/post/user-namespaces/</guid>
-      <description>Ian Coldwater recently had a great thread on bridging the gap between the security and container worlds. A lot of those answers wont fit in a tweet, so here’s my attempt for a more in-depth response.
-Namespaces for everyone User namespaces are a way to create unique views of user and group IDs. Unlike other namespaces, they can be created by non-root users and are primarily used by unprivileged processes to access capabilities normally reserved for root.</description>
+      <description>Ian Coldwater recently had a great thread on bridging the gap between the security and container worlds. A lot of those answers wont fit in a tweet, so here’s my attempt for a more in-depth response.&#xA;Namespaces for everyone User namespaces are a way to create unique views of user and group IDs. Unlike other namespaces, they can be created by non-root users and are primarily used by unprivileged processes to access capabilities normally reserved for root.</description>
     </item>
-    
     <item>
       <title>Containers from Scratch</title>
       <link>https://ericchiang.github.io/post/containers-from-scratch/</link>
       <pubDate>Sat, 07 Jan 2017 00:00:00 +0000</pubDate>
-      
       <guid>https://ericchiang.github.io/post/containers-from-scratch/</guid>
-      <description>This is write up for talk I gave at CAT BarCamp, an awesome unconference at Portland State University. The talk started with the self-imposed challenge &amp;ldquo;give an intro to containers without Docker or rkt.&amp;rdquo;
-Often thought of as cheap VMs, containers are just isolated groups of processes running on a single host. That isolation leverages several underlying technologies built into the Linux kernel: namespaces, cgroups, chroots and lots of terms you&amp;rsquo;ve probably heard before.</description>
+      <description>This is write up for talk I gave at CAT BarCamp, an awesome unconference at Portland State University. The talk started with the self-imposed challenge &amp;ldquo;give an intro to containers without Docker or rkt.&amp;rdquo;&#xA;Often thought of as cheap VMs, containers are just isolated groups of processes running on a single host. That isolation leverages several underlying technologies built into the Linux kernel: namespaces, cgroups, chroots and lots of terms you&amp;rsquo;ve probably heard before.</description>
     </item>
-    
     <item>
       <title>A Let&#39;s Encrypt Client for Go</title>
       <link>https://ericchiang.github.io/post/go-letsencrypt/</link>
       <pubDate>Fri, 13 Nov 2015 00:00:00 +0000</pubDate>
-      
       <guid>https://ericchiang.github.io/post/go-letsencrypt/</guid>
-      <description>Just want to jump into the GitHub project? Click here.
-If you haven&amp;rsquo;t heard, Let&amp;rsquo;s Encrypt is trying to secure the internet with automated and free TLS certificates.
-In preperation for the Public Beta in December, I&amp;rsquo;ve written a simple client in Go which you can go get on GitHub. This post uses that client to take you through the workflow of signing up, completing challenges, and requesting certificates. Let&amp;rsquo;s Encrypt!</description>
+      <description>Just want to jump into the GitHub project? Click here.&#xA;If you haven&amp;rsquo;t heard, Let&amp;rsquo;s Encrypt is trying to secure the internet with automated and free TLS certificates.&#xA;In preperation for the Public Beta in December, I&amp;rsquo;ve written a simple client in Go which you can go get on GitHub. This post uses that client to take you through the workflow of signing up, completing challenges, and requesting certificates. Let&amp;rsquo;s Encrypt!</description>
     </item>
-    
     <item>
       <title>Testing Databases with Docker</title>
       <link>https://ericchiang.github.io/post/testing-dbs-with-docker/</link>
       <pubDate>Mon, 14 Sep 2015 00:00:00 +0000</pubDate>
-      
       <guid>https://ericchiang.github.io/post/testing-dbs-with-docker/</guid>
-      <description>Databases, authentication management, metric aggregators; there&amp;rsquo;s a service or API for everything.
-There&amp;rsquo;s also a place called dependency hell.
-Dependency hell. Where it&amp;rsquo;s impossible to run a test on your laptop. Where bugs are found by running a main, clicking around, and seeing what breaks. Where you cross your fingers and pray that new versions don&amp;rsquo;t break everything. Where we use mocks and stubs to combat a growing technology stack.</description>
+      <description>Databases, authentication management, metric aggregators; there&amp;rsquo;s a service or API for everything.&#xA;There&amp;rsquo;s also a place called dependency hell.&#xA;Dependency hell. Where it&amp;rsquo;s impossible to run a test on your laptop. Where bugs are found by running a main, clicking around, and seeing what breaks. Where you cross your fingers and pray that new versions don&amp;rsquo;t break everything. Where we use mocks and stubs to combat a growing technology stack.</description>
     </item>
-    
     <item>
       <title>TLS with Go</title>
       <link>https://ericchiang.github.io/post/go-tls/</link>
       <pubDate>Sun, 21 Jun 2015 00:00:00 +0000</pubDate>
-      
       <guid>https://ericchiang.github.io/post/go-tls/</guid>
-      <description>NOTE: For an updated version of this post, see the GopherCon 2019 talk &amp;ldquo;PKI for Gopher&amp;rdquo;. (Video, Slides)
-For a long time my knowledge of TLS was Googling &amp;ldquo;how to configure nginx as an HTTPS proxy.&amp;rdquo; Okay, the cert goes here and the key goes here, that&amp;rsquo;s my job done. But with more and more pushes for things HTTPS and HTTP/2 (which defaults to using TLS), it sometimes helps to understand this a little better.</description>
+      <description>NOTE: For an updated version of this post, see the GopherCon 2019 talk &amp;ldquo;PKI for Gopher&amp;rdquo;. (Video, Slides)&#xA;For a long time my knowledge of TLS was Googling &amp;ldquo;how to configure nginx as an HTTPS proxy.&amp;rdquo; Okay, the cert goes here and the key goes here, that&amp;rsquo;s my job done. But with more and more pushes for things HTTPS and HTTP/2 (which defaults to using TLS), it sometimes helps to understand this a little better.</description>
     </item>
-    
   </channel>
 </rss>
