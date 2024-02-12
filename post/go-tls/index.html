@@ -38,7 +38,7 @@ if (!doNotTrack) {
 <div class="article-meta">
 <h1><span class="title">TLS with Go</span></h1>
 
-<h2 class="date">2015/06/21</h2>
+<p class="date">2015/06/21</p>
 </div>
 
 <main>
@@ -109,7 +109,7 @@ fmt.Println(verify(&amp;privKey.PublicKey, plainText, signature))
 </code></pre><p>What this signature is doing is confirming that a document has not been changed since the private key signed it. And because a public key is public and can be posted anywhere, anyone can run this same test.</p>
 <p>This might be very helpful for say, a certificate authority, who wants to be able to distribute documents which can&rsquo;t be altered without everyone detecting.</p>
 <h2 id="go-and-x509">Go and x509</h2>
-<p>Go&rsquo;s <code>crypto/x509</code> package is what I&rsquo;ll be using to actually generate and work with certificates. It&rsquo;s a package with a lot of options and a somewhat intimidating interface. For instance, the ridiculous number of fields on the <!-- raw HTML omitted --><code>Certificate</code><!-- raw HTML omitted --> struct.</p>
+<p>Go&rsquo;s <code>crypto/x509</code> package is what I&rsquo;ll be using to actually generate and work with certificates. It&rsquo;s a package with a lot of options and a somewhat intimidating interface. For instance, the ridiculous number of fields on the <a href="https://golang.org/pkg/crypto/x509/#Certificate" target="_blank"><code>Certificate</code></a> struct.</p>
 <p>To create a new certificate, we first have to provide a template for one. Because we&rsquo;ll be doing this a couple times, I&rsquo;ve made a helper function to do some of the busy work.</p>
 <pre tabindex="0"><code>// helper function to create a cert template with a serial number and other required fields
 func CertTemplate() (*x509.Certificate, error) {
@@ -196,7 +196,7 @@ K5Vulo8NmzMOCcBjAJ9B0IXOLg9ba+dyiOK8pIayBiX28FRaxRUiU31iEPI8gbTN
 /6W3f//C3eTDCCLwEmGOmOalpBnaF4wsA6CTxDmwDyTmj9+TRkaEEylEQTlXZA==
 -----END CERTIFICATE-----
 </code></pre><p>Right away we can use this PEM encoded block in a server. However, let&rsquo;s remember that a certificate is just a public key. To prove ownership of a certificate you must have the private key as well. In the case of our server, we have to load <code>rootKey</code> if we want to use <code>rootCert</code>.</p>
-<p>To keep this code cleaner, I&rsquo;m going to use the <!-- raw HTML omitted --><code>httptest</code><!-- raw HTML omitted --> package, which will allow us to spin up and shut down servers on a whim.</p>
+<p>To keep this code cleaner, I&rsquo;m going to use the <a href="https://golang.org/pkg/net/http/httptest/" target="_blank"><code>httptest</code></a> package, which will allow us to spin up and shut down servers on a whim.</p>
 <pre tabindex="0"><code>// PEM encode the private key
 rootKeyPEM := pem.EncodeToMemory(&amp;pem.Block{
 	Type: &#34;RSA PRIVATE KEY&#34;, Bytes: x509.MarshalPKCS1PrivateKey(rootKey),
@@ -298,7 +298,7 @@ HI!
 <p>But as you learn more about TLS, you can find that it&rsquo;s really powerful. Even if you aren&rsquo;t serving HTTP traffic, being able to doing able to do this kind of verification and encryption is a lot easier than trying to set something else up yourself. And the next time a website dumps a bunch of <code>.crt</code> files on you, you&rsquo;ll hopefully be able to understand exactly what to do with them.</p>
 <h2 id="bonus-getting-the-server-to-trust-the-client">Bonus: Getting the Server to Trust the Client</h2>
 <p>Most web servers don&rsquo;t care who the client is who&rsquo;s accessing them. Or at least the client authentication they do do isn&rsquo;t at the TCP layer, it&rsquo;s done with session tokens and HTTP middleware.</p>
-<p>While websites don&rsquo;t find this kind of auth particularly useful, databases and other architecture like a compute clusters, when a server wants to verify it&rsquo;s client without a password, can use this to both restrict access and encrypt communications. For instance, the is what <code>boot2docker</code> does in its more recent releases, while Google&rsquo;s <!-- raw HTML omitted -->Kubernetes platform<!-- raw HTML omitted --> has plans to use this for secure master to worker communication.</p>
+<p>While websites don&rsquo;t find this kind of auth particularly useful, databases and other architecture like a compute clusters, when a server wants to verify it&rsquo;s client without a password, can use this to both restrict access and encrypt communications. For instance, the is what <code>boot2docker</code> does in its more recent releases, while Google&rsquo;s <a href="https://github.com/GoogleCloudPlatform/kubernetes/issues/3168#issuecomment-104503217" target="_blank">Kubernetes platform</a> has plans to use this for secure master to worker communication.</p>
 <p>It&rsquo;s easy to turn on client authentication for a Go server.</p>
 <pre tabindex="0"><code>// create a new server which requires client authentication
 s = httptest.NewUnstartedServer(http.HandlerFunc(ok))

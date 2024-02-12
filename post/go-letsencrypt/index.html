@@ -38,11 +38,11 @@ if (!doNotTrack) {
 <div class="article-meta">
 <h1><span class="title">A Let&#39;s Encrypt Client for Go</span></h1>
 
-<h2 class="date">2015/11/13</h2>
+<p class="date">2015/11/13</p>
 </div>
 
 <main>
-<p><!-- raw HTML omitted -->Just want to jump into the GitHub project? <a href="https://github.com/ericchiang/letsencrypt">Click here</a>.<!-- raw HTML omitted --></p>
+<p><small>Just want to jump into the GitHub project? <a href="https://github.com/ericchiang/letsencrypt">Click here</a>.</small></p>
 <p>If you haven&rsquo;t heard, <a href="https://letsencrypt.org/">Let&rsquo;s Encrypt</a> is trying to secure the internet with automated and free TLS certificates.</p>
 <p>In preperation for the Public Beta in December, I&rsquo;ve written a simple client in Go which you can go get on <a href="https://github.com/ericchiang/letsencrypt">GitHub</a>. This post uses that client to take you through the workflow of signing up, completing challenges, and requesting certificates. Let&rsquo;s Encrypt!</p>
 <p>For these examples, I&rsquo;ve spun up a <a href="https://github.com/letsencrypt/boulder">Let&rsquo;s Encrypt server</a> in dev mode on my local machine, made some edits to the server&rsquo;s configuration, and added an entry to my <code>/etc/hosts</code>. See details <a href="https://github.com/ericchiang/letsencrypt#running-the-tests">here</a> if you want to follow along.</p>

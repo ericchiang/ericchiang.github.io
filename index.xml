@@ -6,8 +6,15 @@
     <description>Recent content on posts</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
-    <lastBuildDate>Tue, 07 Sep 2021 00:00:00 +0000</lastBuildDate>
+    <lastBuildDate>Mon, 12 Feb 2024 00:00:00 +0000</lastBuildDate>
     <atom:link href="https://ericchiang.github.io/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>Analyzing Spotify stream history</title>
+      <link>https://ericchiang.github.io/post/spotify/</link>
+      <pubDate>Mon, 12 Feb 2024 00:00:00 +0000</pubDate>
+      <guid>https://ericchiang.github.io/post/spotify/</guid>
+      <description>Apologies in advanced for the music tastes.&#xA;I recently learned Spotify provides downloads for users&amp;rsquo; streaming history. For me, this is over 10 years worth of data, so at the very least it seemed like a good nostalgia trip. This post covers some of my analysis of my personal export, and hopefully is a good starting place if you&amp;rsquo;re interested in exploring your own.&#xA;To request your data, visit your Spotify account&amp;rsquo;s privacy page and select &amp;ldquo;Extended streaming history.</description>
+    </item>
     <item>
       <title>The Rust Borrow Checker</title>
       <link>https://ericchiang.github.io/post/rust-borrow/</link>
