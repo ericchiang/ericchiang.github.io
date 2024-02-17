@@ -45,7 +45,7 @@ if (!doNotTrack) {
 
 <main>
 <p>What&rsquo;s a little shared memory between friends?</p>
-<p>As someone who works a lot with operating systems, there are many scenario that require loading C libraries. Plugins that use <a href="https://github.com/google/go-pkcs11">shared libraries</a>, low-level <a href="https://github.com/go-piv/piv-go">device APIs</a>, random <a href="https://github.com/google/go-tspi">Linux utilities</a>. Despite modern options for interprocess communication, sometimes you get a header file and a shared object and have to run with it.</p>
+<p>As someone who works a lot with operating systems, there are many scenarios that require loading C libraries. Plugins that use <a href="https://github.com/google/go-pkcs11">shared libraries</a>, low-level <a href="https://github.com/go-piv/piv-go">device APIs</a>, random <a href="https://github.com/google/go-tspi">Linux utilities</a>. Despite modern options for interprocess communication, sometimes you get a header file and a shared object and have to run with it.</p>
 <p>This post covers <a href="https://pkg.go.dev/cmd/cgo">cgo</a>, Go&rsquo;s C interoperability layer.</p>
 <h2 id="referencing-c">Referencing C</h2>
 <p>Go programs reference C symbols through the magic &ldquo;C&rdquo; package. This is a pseudo-package that exposes C symbols to Go, as well as a number of utilities we&rsquo;ll cover later.</p>
