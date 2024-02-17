@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en-us">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Calling C from Go | posts</title>
+    <link rel="stylesheet" href="/css/style.css" />
+    <link rel="stylesheet" href="/css/fonts.css" />
+    
+	
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-YR9ZQCMH4S"></script>
+<script>
+var doNotTrack = false;
+if (!doNotTrack) {
+	window.dataLayer = window.dataLayer || [];
+	function gtag(){dataLayer.push(arguments);}
+	gtag('js', new Date());
+	gtag('config', 'G-YR9ZQCMH4S', { 'anonymize_ip': false });
+}
+</script>
+
+  </head>
+
+  <body>
+    <nav>
+    <ul class="menu">
+      
+      <li><a href="/">posts</a></li>
+      
+      <li><a href="/about/">about</a></li>
+      
+      <li><a href="/post/index.xml">rss</a></li>
+      
+      <li><a href="/license/">license</a></li>
+      
+    </ul>
+    <hr/>
+    </nav>
+
+<div class="article-meta">
+<h1><span class="title">Calling C from Go</span></h1>
+
+<p class="date">2024/02/17</p>
+</div>
+
+<main>
+<p>What&rsquo;s a little shared memory between friends?</p>
+<p>As someone who works a lot with operating systems, there are many scenario that require loading C libraries. Plugins that use <a href="https://github.com/google/go-pkcs11">shared libraries</a>, low-level <a href="https://github.com/go-piv/piv-go">device APIs</a>, random <a href="https://github.com/google/go-tspi">Linux utilities</a>. Despite modern options for interprocess communication, sometimes you get a header file and a shared object and have to run with it.</p>
+<p>This post covers <a href="https://pkg.go.dev/cmd/cgo">cgo</a>, Go&rsquo;s C interoperability layer.</p>
+<h2 id="referencing-c">Referencing C</h2>
+<p>Go programs reference C symbols through the magic &ldquo;C&rdquo; package. This is a pseudo-package that exposes C symbols to Go, as well as a number of utilities we&rsquo;ll cover later.</p>
+<p>The &ldquo;C&rdquo; package allows defining C includes and configuration above the import statement. Usually reserved for <code>#include &lt;...&gt;</code> declarations and C compiler and linker options, the preamble can hold small bits of code to be used by Go.</p>
+<pre tabindex="0"><code>package main
+
+/*
+int add(int a, int b) {
+	return a + b;
+}
+*/
+import &#34;C&#34;
+import &#34;fmt&#34;
+
+func main() {
+	var a, b C.int = 1, 2
+	n := C.add(a, b)
+	fmt.Printf(&#34;1 + 2 = %d\n&#34;, n)
+}
+</code></pre><p>Any type can be referenced through the &ldquo;C&rdquo; import, not only exported functions. For example, a struct or enum typedef.</p>
+<pre tabindex="0"><code>package main
+
+/*
+typedef struct adder {
+	int a;
+	int b;
+} adder_t;
+
+int adder_add(adder_t *a) {
+	return a-&gt;a + a-&gt;b;
+}
+*/
+import &#34;C&#34;
+import &#34;fmt&#34;
+
+func main() {
+	a := C.adder_t{
+		a: 1,
+		b: 2,
+	}
+	fmt.Printf(&#34;1 + 2 = %d\n&#34;, C.adder_add(&amp;a))
+}
+</code></pre><p>Or symbols from included headers.</p>
+<pre tabindex="0"><code>package main
+
+/*
+#include &lt;math.h&gt;
+*/
+import &#34;C&#34;
+import &#34;fmt&#34;
+
+func main() {
+	fmt.Println(C.pow(2, 8))
+}
+</code></pre><h2 id="arrays-and-slices">Arrays and slices</h2>
+<p>Go slices have a <a href="https://go.dev/blog/slices-intro">memory layout</a> that makes them unique from C arrays. To pass them to and from C, we need to access the underlying slice data, not just the header containing information like the slice&rsquo;s size and capacity.</p>
+<p>Historically, there have been <a href="https://github.com/golang/go/issues/53003">many tricks</a> for accessing and modifying the memory of strings and slices. This post will stick to the newer APIs defined in the unsafe package, but you may see older variants in the wild.</p>
+<p>To pass a Go slice as an array of values to C, use <a href="https://pkg.go.dev/unsafe#SliceData"><code>unsafe.SliceData()</code></a> to get a pointer to the start of the slice&rsquo;s data.</p>
+<pre tabindex="0"><code>package main
+
+/*
+#include &lt;stddef.h&gt;
+
+typedef struct person {
+	int age;
+} person_t;
+
+float average_age(person_t* people, size_t size) {
+	int sum = 0;
+	for (int i = 0; i &lt; size; i++) {
+		sum = sum + people[i].age;
+	}
+	return (float)sum / size;
+}
+*/
+import &#34;C&#34;
+import (
+	&#34;fmt&#34;
+	&#34;unsafe&#34;
+)
+
+func main() {
+	people := []C.person_t{
+		{age: 10},
+		{age: 32},
+		{age: 57},
+		{age: 92},
+	}
+
+	// Pass a Go slice as a C array.
+	ave := C.average_age(unsafe.SliceData(people), C.size_t(len(people)))
+	fmt.Printf(&#34;Average age: %f\n&#34;, ave)
+}
+</code></pre><p>To go the other direction, C arrays can be converted to Go slices using <a href="https://pkg.go.dev/unsafe#Slice"><code>unsafe.Slice()</code></a>. Be careful since this backs the Go slice with the C data, it doesn&rsquo;t copy. So modifying the created slice values modifies the C memory.</p>
+<pre tabindex="0"><code>package main
+
+/*
+#include &lt;stddef.h&gt;
+
+typedef struct person {
+	int age;
+} person_t;
+
+const person_t PEOPLE[] = {
+	{.age = 10},
+	{.age = 32},
+	{.age = 57},
+	{.age = 92},
+};
+
+const person_t* get_people(size_t* size) {
+	*size = 4;
+	return PEOPLE;
+}
+*/
+import &#34;C&#34;
+import (
+	&#34;fmt&#34;
+	&#34;unsafe&#34;
+)
+
+func main() {
+	var size C.size_t
+	peoplePtr := C.get_people(&amp;size)
+
+	// Create a Go slice backed by a C array.
+	people := unsafe.Slice(peoplePtr, size)
+
+	sum := 0.0
+	for _, p := range people {
+		sum += float64(p.age)
+	}
+	fmt.Printf(&#34;Average age: %f\n&#34;, sum/float64(size))
+}
+</code></pre><h2 id="strings">Strings</h2>
+<p>The &ldquo;C&rdquo; package provides a number of convinences for converting between Go strings and C strings, handling the difference in null-termination.</p>
+<p>To convert a Go string to C, use <code>C.CString()</code>. Note that this allocates C memory for the resulting string, and must be manually free&rsquo;d.</p>
+<pre tabindex="0"><code>package main
+
+/*
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+
+void say_hello(char* name) {
+	printf(&#34;Hello, %s!\n&#34;, name);
+}
+*/
+import &#34;C&#34;
+import &#34;unsafe&#34;
+
+func main() {
+	name := C.CString(&#34;cgo&#34;)
+	defer C.free(unsafe.Pointer(name)) // Don&#39;t forget to free!
+
+	C.say_hello(name)
+}
+</code></pre><p>The corresponding <code>C.GoString()</code> provides the conversion in the opposite direction, from C to Go.</p>
+<pre tabindex="0"><code>package main
+
+/*
+const char* go_proverb() {
+	return &#34;With the unsafe package there are no guarantees.&#34;;
+}
+*/
+import &#34;C&#34;
+import &#34;fmt&#34;
+
+func main() {
+	proverb := C.GoString(C.go_proverb())
+	fmt.Println(proverb)
+}
+</code></pre><h2 id="pointer-fields">Pointer fields</h2>
+<p>Go&rsquo;s runtime implements both garbage collection and stack resizing, routinely moving or reclaiming allocations. Without bookkeeping, there&rsquo;s a danger that Go might garbage collect or move a pointer that&rsquo;s actively being used by C.</p>
+<p>Go pointers used as arguments to C functions are implicitly handled by the Go runtime for the lifetime of the C call (which is why <code>C.adder_add(&amp;a)</code> works in the first section). But what if we pass a pointer some other way?</p>
+<p>Consider the following program, which takes a struct with a pointer field.</p>
+<pre tabindex="0"><code>package main
+
+/*
+#include &lt;stdio.h&gt;
+
+typedef struct person {
+	int age;
+} person_t;
+
+typedef struct pet {
+	int age;
+	person_t* owner; // Pointer to a person_t struct.
+} pet_t;
+
+void print_pet(pet_t* p) {
+	printf(&#34;Pet age %d owned by person age %d\n&#34;, p-&gt;age, p-&gt;owner-&gt;age);
+}
+*/
+import &#34;C&#34;
+
+func main() {
+	person := C.person_t{
+		age: 50,
+	}
+	pet := C.pet_t{
+		age:   3,
+		owner: &amp;person, // Invalid: passing Go pointer to C without explicit declaration.
+	}
+	C.print_pet(&amp;pet)
+}
+</code></pre><p>Go detects that the &ldquo;person&rdquo; pointer has been passed to C without handling by the Go runtime, and crashes the program.</p>
+<pre tabindex="0"><code>panic: runtime error: cgo argument has Go pointer to unpinned Go pointer
+
+goroutine 1 [running]:
+main.main.func1(0xc000016060)
+	.../pointer.go:33 +0x26
+main.main()
+	.../pointer.go:33 +0x5f
+exit status 2
+</code></pre><p>There are two potential fixes to this issue.</p>
+<p>First, we can allocate the struct using C, sidestepping the Go runtime altogether. Remember to manually free the the returned value.</p>
+<pre tabindex="0"><code>func main() {
+	// Person is now allocated and managed by the C runtime, not Go.
+	//
+	// The &#34;C&#34; package provides &#34;C.sizeof_TYPE&#34; variables for convenience.
+	person := (*C.person_t)(C.malloc(C.sizeof_person_t))
+	defer C.free(unsafe.Pointer(person)) // Remember to free after use!
+	person.age = 50
+
+	pet := C.pet_t{
+		age:   3,
+		owner: person, // Pointer is managed by C, not Go.
+	}
+	C.print_pet(&amp;pet)
+}
+</code></pre><p>Second, Go 1.21 introduced the <a href="https://pkg.go.dev/runtime#Pinner"><code>runtime.Pinner</code></a> API, which can mark pointers that shouldn&rsquo;t be moved or reclaimed. In this case, Go manages the pointer, but knows not to modify it until after our program calls <code>Unpin()</code>.</p>
+<pre tabindex="0"><code>func main() {
+	pinner := &amp;runtime.Pinner{}
+	defer pinner.Unpin()
+
+	person := C.person_t{
+		age: 50,
+	}
+	pinner.Pin(&amp;person) // &#34;Pin&#34; pointer until Unpin() is called.
+
+	pet := C.pet_t{
+		age:   3,
+		owner: &amp;person, // Pinned Go pointer is safe to be passed to C.
+	}
+	C.print_pet(&amp;pet)
+}
+</code></pre><p>There are many, many more rules and nuances covered by the <a href="https://pkg.go.dev/cmd/cgo#hdr-Passing_pointers">cgo docs</a>.</p>
+<h2 id="errno">errno</h2>
+<p>One last convenience to mention is Go&rsquo;s automatic handling of errno. Because goroutines can be moved to different OS threads at any time, it&rsquo;s <a href="https://github.com/golang/go/issues/1360#issuecomment-66053758">not safe</a> to call a C function then read the value of <code>C.errno</code> after. Those statements may happen on different threads.</p>
+<p>Instead, Go provides automatic handling of errno by allowing an error to be returned from all C calls. The following code calls <code>getrlimit(2)</code> and uses the returned error to check for a non-zero errno.</p>
+<pre tabindex="0"><code>package main
+
+/*
+#include &lt;sys/resource.h&gt;
+typedef struct rlimit rlimit_t; // Create typedef to reference from Go.
+*/
+import &#34;C&#34;
+import (
+	&#34;fmt&#34;
+	&#34;log&#34;
+)
+
+func main() {
+	rlimit := C.rlimit_t{}
+	if _, err := C.getrlimit(C.RLIMIT_NOFILE, &amp;rlimit); err != nil {
+		// errno returned as a Go error.
+		log.Fatalf(&#34;getrlimit: %v&#34;, err)
+	}
+	fmt.Println(&#34;Current:&#34;, rlimit.rlim_cur)
+	fmt.Println(&#34;Maximum:&#34;, rlimit.rlim_max)
+
+}
+</code></pre><p>It&rsquo;s worth noting this applies to all libraries that implement similar error handling. If you do need to capture a thread specific variable, do so within C.</p>
+<pre tabindex="0"><code>/*
+#include &lt;errno.h&gt;
+#include &lt;string.h&gt;
+#include &lt;sys/resource.h&gt;
+
+typedef struct rlimit rlimit_t;
+
+// Wrapper for getrlimit that also captures errno from the same thread.
+int _getrlimit(int resource, struct rlimit *rlim) {
+ 	int n;
+ 	n = getrlimit(resource, rlim);
+ 	if (n == 0) {
+ 		return 0;
+ 	}
+ 	return errno;
+}
+*/
+import &#34;C&#34;
+</code></pre><h2 id="go-from-c">Go from C?</h2>
+<p>Go <em>techinically</em> provides support for operating as a shared library with <a href="https://pkg.go.dev/cmd/cgo#hdr-C_references_to_Go">exported C symbols</a>.</p>
+<p>Practically, because Go shared libraries contain the entire Go runtime, there are some operational drawbacks when loading one. Some querky, such as <a href="https://github.com/golang/go/issues/11100">lack of <code>dlclose</code> support</a>. Some catastrophic, like <a href="https://github.com/golang/go/issues/15538">deadlocks if the loading process ever calls <code>fork()</code></a>.</p>
+<p>To load a Go shared library safely, you have to control the loading C in program as well. At which point there are undoubtly simplier architectures. And if you don&rsquo;t control the loading C program, maybe use Rust instead?</p>
+<h2 id="_cgo-is-not-go_"><em>&ldquo;Cgo is not Go&rdquo;</em></h2>
+<p>While there are situations where cgo is necessary, it remains an extremely awkward way to write code. C and Go interact in subtle ways that require a considerable amount of manual tracking. Forget to free a variable, use the wrong unsafe method, or make assumptions about what thread you&rsquo;re running on, and you end up with hard to debug memory corruption failure rather than a compile error or stack trace.</p>
+<p>At the end of the day, as Rob Pike&rsquo;s said, <a href="https://www.youtube.com/watch?v=PAAkCSZUG1c&amp;t=12m37s"><em>&ldquo;Cgo is not Go.&rdquo;</em></a></p>
+
+</main>
+
+  <footer>
+  
+  
+  </footer>
+    <script>
+	  document.querySelectorAll("h2, h3, h4, h5, h6").forEach(function(node) {
+if (node.id === "") {
+  return;
+}
+let a = document.createElement("a");
+let img = document.createElement("img");
+img.src = "/img/link.svg";
+img.className = "header-link";
+a.href = "#" + node.id;
+a.append(img);
+node.append(a);
+
+	  });
+    </script>
+  </body>
+</html>
+
