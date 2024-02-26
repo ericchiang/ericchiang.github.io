@@ -9,7 +9,7 @@
     <lastBuildDate>Mon, 26 Feb 2024 00:00:00 +0000</lastBuildDate>
     <atom:link href="https://ericchiang.github.io/index.xml" rel="self" type="application/rss+xml" />
     <item>
-      <title>Writing shared libraries using Rust</title>
+      <title>Writing shared libraries in Rust</title>
       <link>https://ericchiang.github.io/post/rust-libs/</link>
       <pubDate>Mon, 26 Feb 2024 00:00:00 +0000</pubDate>
       <guid>https://ericchiang.github.io/post/rust-libs/</guid>
