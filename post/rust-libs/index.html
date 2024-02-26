@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en-us">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Writing shared libraries using Rust | posts</title>
+    <link rel="stylesheet" href="/css/style.css" />
+    <link rel="stylesheet" href="/css/fonts.css" />
+    
+	
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-YR9ZQCMH4S"></script>
+<script>
+var doNotTrack = false;
+if (!doNotTrack) {
+	window.dataLayer = window.dataLayer || [];
+	function gtag(){dataLayer.push(arguments);}
+	gtag('js', new Date());
+	gtag('config', 'G-YR9ZQCMH4S', { 'anonymize_ip': false });
+}
+</script>
+
+  </head>
+
+  <body>
+    <nav>
+    <ul class="menu">
+      
+      <li><a href="/">posts</a></li>
+      
+      <li><a href="/about/">about</a></li>
+      
+      <li><a href="/post/index.xml">rss</a></li>
+      
+      <li><a href="/license/">license</a></li>
+      
+    </ul>
+    <hr/>
+    </nav>
+
+<div class="article-meta">
+<h1><span class="title">Writing shared libraries using Rust</span></h1>
+
+<p class="date">2024/02/26</p>
+</div>
+
+<main>
+<p>Every tool that gets big enough eventually provides a way to support third-party logic. Maybe you expose APIs for clients to call. Maybe you take some code and run it in a sandbox. Maybe you embed a Lua interpreter.</p>
+<p>For many programs, extensibility means dynamic shared libraries. Good old, &ldquo;here&rsquo;s a .so file for you to dlopen().&rdquo; <a href="https://docs.oasis-open.org/pkcs11/pkcs11-base/v2.40/os/pkcs11-base-v2.40-os.html">PKCS #11</a>, <a href="https://www.sudo.ws/about/plugins/">Sudo Plugins</a>, <a href="https://docs.python.org/3/extending/extending.html">Python</a> and <a href="https://nodejs.org/api/addons.html">NodeJS</a> addons, <a href="https://www.sqlite.org/loadext.html">SQLite</a> and <a href="https://www.postgresql.org/download/products/6-postgresql-extensions/">Postgres</a> extensions, <a href="https://www.nginx.com/resources/wiki/modules/">Nginx</a> and <a href="https://httpd.apache.org/modules/">httpd</a> modules, even <a href="https://blog.jessfraz.com/post/ld_preload/">LD_PRELOAD</a> hacks.</p>
+<p>As much fun as C is, a few <a href="https://github.com/google/native-pkcs11">recent</a> <a href="https://github.com/square/sudo_pair">projects</a> that take advantage of Rust&rsquo;s FFI support have caught my eye. This post covers a proof-of-concept Linux-PAM module for <a href="https://en.wikipedia.org/wiki/Google_Authenticator"><em>Google Authenticator</em></a>*, going through the steps to build a shared library with Rust.</p>
+<p><sub><em>*Sure there&rsquo;s an actual module <a href="https://github.com/google/google-authenticator-libpam">maintained under Google&rsquo;s GitHub org</a>, but where&rsquo;s the fun in that?</em></sub></p>
+<h2 id="pluggable-authentication-modules">Pluggable Authentication Modules</h2>
+<p>Linux-PAM is a system that agressively embraces shared libraries. Even by default, PAM logic is implemented as shared objects rather than directly in the core library. For example, the default PAM configuration on my Debian machine is setup to call <a href="https://github.com/linux-pam/linux-pam/blob/v1.6.0/modules/pam_unix"><code>pam_unix.so</code></a>, which does the heavy lifting.</p>
+<pre tabindex="0"><code>$ ls /lib/x86_64-linux-gnu/security/
+pam_access.so     pam_keyinit.so    pam_pwhistory.so   pam_timestamp.so
+pam_debug.so      pam_lastlog.so    pam_rhosts.so      pam_tty_audit.so
+pam_deny.so       pam_limits.so     pam_rootok.so      pam_umask.so
+pam_echo.so       pam_listfile.so   pam_securetty.so   pam_unix.so
+pam_env.so        pam_localuser.so  pam_selinux.so     pam_userdb.so
+pam_exec.so       pam_loginuid.so   pam_sepermit.so    pam_usertype.so
+pam_faildelay.so  pam_mail.so       pam_setquota.so    pam_warn.so
+pam_faillock.so   pam_mkhomedir.so  pam_shells.so      pam_wheel.so
+pam_filter.so     pam_motd.so       pam_stress.so      pam_xauth.so
+pam_ftp.so        pam_namespace.so  pam_succeed_if.so
+pam_group.so      pam_nologin.so    pam_systemd.so
+pam_issue.so      pam_permit.so     pam_time.so
+$ grep &#39;^auth&#39; /etc/pam.d/common-auth
+auth    [success=1 default=ignore]      pam_unix.so nullok
+auth    requisite                       pam_deny.so
+auth    required                        pam_permit.so
+</code></pre><p>Linux-PAM authentication services are expected to export the following API.</p>
+<pre tabindex="0"><code>int pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc,
+                        const char **argv);
+int pam_sm_setcred(pam_handle_t *pamh, int flags, int argc,
+                   const char **argv);
+</code></pre><p><code>pam_handle_t</code> is the important type here, providing a handle to query PAM for the user to authenticate (<a href="https://man7.org/linux/man-pages/man3/pam_get_user.3.html"><code>pam_get_user(3)</code></a>), as well as the entered password (<a href="https://man7.org/linux/man-pages/man3/pam_get_authtok.3.html"><code>pam_get_authtok(3)</code></a>).</p>
+<h2 id="c-and-rust">C and Rust</h2>
+<p>First things first, create a Rust library.</p>
+<pre tabindex="0"><code>cargo new --lib pam_totp
+</code></pre><p>The package&rsquo;s configuration will define a few dependencies to compute TOTP codes, tools for C bindings, and declare it as a C shared library.</p>
+<pre tabindex="0"><code>[package]
+name = &#34;pam_totp&#34;
+version = &#34;0.1.0&#34;
+edition = &#34;2021&#34;
+
+[dependencies]
+data-encoding = &#34;2.5.0&#34; # Base32 encoding
+ring = &#34;0.17.8&#34;         # HMAC for TOTP logic
+
+[build-dependencies]
+bindgen = &#34;0.69.4&#34; # C to Rust bindings generation
+
+[lib]
+crate-type = [&#34;lib&#34;, &#34;cdylib&#34;]
+</code></pre><p><a href="https://rust-lang.github.io/rust-bindgen/">Bindgen</a> is Rust&rsquo;s stratey for generating Rust equivalent structs and functions from C. Given a C header file, it produces equivalent Rust representations for the local crate to use.</p>
+<p>To tell bindgen what to generate, define a header file including the PAM headers the project needs.</p>
+<pre tabindex="0"><code>// wrapper.h 
+#include &lt;security/pam_appl.h&gt;
+#include &lt;security/pam_modules.h&gt;
+#include &lt;security/pam_ext.h&gt;
+</code></pre><p>Bindgen is called through <a href="https://doc.rust-lang.org/cargo/reference/build-scripts.html"><code>build.rs</code></a>, which reads the header file and runs the generator. Since the module will need to use some PAM functions, not just export symbols, it also needs to link against the PAM libraries to pull in implementations.</p>
+<pre tabindex="0"><code>// build.rs
+use bindgen;
+
+use std::env;
+use std::path::PathBuf;
+
+fn main() {
+    println!(&#34;cargo:rustc-link-lib=dylib=pam&#34;); // Link against PAM shared libraries.
+    let bindings = bindgen::Builder::default()
+        .header(&#34;wrapper.h&#34;)
+        // Generate constants that match c_int as i32.
+        // See: https://users.rust-lang.org/t/interfacing-c-code-with-bindgen-define-and-types/67595
+        .default_macro_constant_type(bindgen::MacroTypeVariation::Signed)
+        .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
+        .generate()
+        .expect(&#34;Unable to generate bindings&#34;);
+    let out_path = PathBuf::from(env::var(&#34;OUT_DIR&#34;).unwrap());
+    bindings
+        .write_to_file(out_path.join(&#34;bindings.rs&#34;))
+        .expect(&#34;Couldn&#39;t write bindings!&#34;);
+}
+</code></pre><p>On Debian this required clang and PAM development headers.</p>
+<pre tabindex="0"><code>sudo apt-get install -y clang libpam0g-dev
+</code></pre><p>After building, the generated Rust code will be in the project&rsquo;s debug directory.</p>
+<pre tabindex="0"><code>$ cargo build
+...
+$ sed -n &#34;73,92p&#34; target/debug/build/pam_totp-*/out/bindings.rs
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct pam_handle {
+    _unused: [u8; 0],
+}
+pub type pam_handle_t = pam_handle;
+extern &#34;C&#34; {
+    pub fn pam_set_item(
+        pamh: *mut pam_handle_t,
+        item_type: ::std::os::raw::c_int,
+        item: *const ::std::os::raw::c_void,
+    ) -&gt; ::std::os::raw::c_int;
+}
+extern &#34;C&#34; {
+    pub fn pam_get_item(
+        pamh: *const pam_handle_t,
+        item_type: ::std::os::raw::c_int,
+        item: *mut *const ::std::os::raw::c_void,
+    ) -&gt; ::std::os::raw::c_int;
+}
+</code></pre><p>Generated bindings heavily leverage Rust&rsquo;s <a href="https://doc.rust-lang.org/std/primitive.pointer.html">pointer type</a>, a rare lanugage feature for &ldquo;normal&rdquo; Rust where references (<code>&amp;T</code>) are used instead. Rust pointers behave almost identically to C, but have mutability annotations (<code>T* t</code> becomes <code>t: *mut T</code>), and require unsafe blocks for almost all operations.</p>
+<p>As an example, the C method <a href="https://man7.org/linux/man-pages/man3/pam_open_session.3.html"><code>pam_open_session(3)</code></a>.</p>
+<pre tabindex="0"><code>int pam_open_session(pam_handle_t *pamh, int flags);
+</code></pre><p>Is translated to the following.</p>
+<pre tabindex="0"><code>fn pam_open_session(pamh: *mut pam_handle_t, flags: c_int) -&gt; c_int;
+</code></pre><p>Finally, to use the bindings, include the generated code in a local module and suppress a ton of lint checks that will complain about C-style naming.</p>
+<pre tabindex="0"><code>// lib/pam.rs
+#![allow(non_upper_case_globals)]
+#![allow(non_camel_case_types)]
+#![allow(non_snake_case)]
+#![allow(dead_code)]
+include!(concat!(env!(&#34;OUT_DIR&#34;), &#34;/bindings.rs&#34;));
+</code></pre><h2 id="google-authenticator-logic">Google Authenticator logic</h2>
+<p>On the Rust side of things, we&rsquo;ll need to prompt the user for a TOTP code and validate it. The library&rsquo;s preamble will import various dependencies and define an error type.</p>
+<pre tabindex="0"><code>// src/lib.rs
+mod pam; // Import generated bindings.
+
+// Various other imports.
+use data_encoding;
+use ring::hmac;
+use std::ffi::*;
+use std::fmt;
+use std::fs;
+use std::ptr;
+use std::time;
+
+/// Result type used by this application.
+///
+/// See: https://doc.rust-lang.org/rust-by-example/error/multiple_error_types/define_error_type.html
+type Result&lt;T&gt; = std::result::Result&lt;T, Error&gt;;
+
+/// Error type that wraps a string error description.
+///
+/// See: https://rust-cli.github.io/book/tutorial/errors.html
+#[derive(Debug)]
+struct Error(String);
+
+impl fmt::Display for Error {
+    fn fmt(&amp;self, f: &amp;mut fmt::Formatter) -&gt; fmt::Result {
+        return write!(f, &#34;{}&#34;, self.0);
+    }
+}
+
+/// Convenience format wrapper that returns an Error type.
+macro_rules! errorf {
+    ($($arg:tt)*) =&gt; {
+        Error(format!($($arg)*))
+    };
+}
+</code></pre><p>The TOTP code is a bit tricky, but gets to leverage <a href="https://github.com/briansmith/ring">github.com/briansmith/ring</a> for the HMAC logic. Ring is a terrific crate for these kinds of lower level crypto primatives.</p>
+<pre tabindex="0"><code>/// Produce a TOTP code using the given key using the same parameters as Google
+/// Google Authenticator (period of 30s and 6 digits).
+///
+/// See:
+/// - https://datatracker.ietf.org/doc/html/rfc6238 (TOTP)
+/// - https://datatracker.ietf.org/doc/html/rfc4226 (HOTP)
+fn totp(k: &amp;[u8]) -&gt; String {
+    let now = time::SystemTime::now();
+    let secs = now
+        .duration_since(time::SystemTime::UNIX_EPOCH)
+        .unwrap_or(time::Duration::new(0, 0))
+        .as_secs();
+
+    let c = secs / 30;
+    let counter: [u8; 8] = [
+        (c &gt;&gt; 56) as u8,
+        (c &gt;&gt; 48) as u8,
+        (c &gt;&gt; 40) as u8,
+        (c &gt;&gt; 32) as u8,
+        (c &gt;&gt; 24) as u8,
+        (c &gt;&gt; 16) as u8,
+        (c &gt;&gt; 8) as u8,
+        c as u8,
+    ];
+
+    let key = hmac::Key::new(hmac::HMAC_SHA1_FOR_LEGACY_USE_ONLY, k);
+    let tag = hmac::sign(&amp;key, &amp;counter[..]);
+
+    let a = tag.as_ref();
+    let o = (a[a.len() - 1] &amp; 0xf) as usize;
+    let n: u32 = ((a[o] &amp; 0x7f) as u32) &lt;&lt; 24
+        | (a[o + 1] as u32) &lt;&lt; 16
+        | (a[o + 2] as u32) &lt;&lt; 8
+        | a[o + 3] as u32;
+
+    return format!(&#34;{:06}&#34;, n % 1000000);
+}
+</code></pre><p>The module then needs to access the TOTP secret and compare a generated TOTP code against the user&rsquo;s input.</p>
+<p>This is the first point where the library that has to reference PAM methods. Specifically, <code>pam_get_user</code> and <code>pam_get_authtok</code>. Calling C methods and working with pointers requires <code>unsafe</code> blocks sprinkled throughout the code.</p>
+<pre tabindex="0"><code>// Storing a TOTP secret on disk probably isn&#39;t a good idea. But the demo gods
+// must have their sacrifices.
+const SECRET_FILE: &amp;str = &#34;/etc/pam_totp_key&#34;;
+
+/// Core pam_sm_authenticate logic, returning a PAM status. The method
+/// challenges the user to enter a Google Authenticator code matched against a
+/// private key stored in /etc/pam_totp_key.
+fn authenticate(pamh: *mut pam::pam_handle_t) -&gt; Result&lt;c_int&gt; {
+    // Google Authenticator keys are base32 encoded.
+    let totp_key = fs::read_to_string(SECRET_FILE)
+        .map_err(|e| errorf!(&#34;failed to read totp secret {}: {}&#34;, SECRET_FILE, e))?;
+    let key = data_encoding::BASE32_NOPAD
+        .decode(totp_key.trim().as_bytes())
+        .map_err(|e| errorf!(&#34;failed to decode totp secret: {}&#34;, e))?;
+
+    // Determine the active user. Returned string is owned by PAM and shouldn&#39;t
+    // be free&#39;d.
+    //
+    // https://man7.org/linux/man-pages/man3/pam_get_user.3.html
+    let mut user_ptr: *const c_char = ptr::null();
+    let rc = unsafe { pam::pam_get_user(pamh, &amp;mut user_ptr, ptr::null()) };
+    if rc != pam::PAM_SUCCESS {
+        return Err(errorf!(&#34;failed getting pam user: {}&#34;, rc));
+    }
+    let username = (unsafe { CStr::from_ptr(user_ptr) })
+        .to_str()
+        .map_err(|e| errorf!(&#34;invalid token string: {}&#34;, e))?;
+    if username != &#34;root&#34; {
+        // Skip authenticating users that aren&#39;t root.
+        return Ok(pam::PAM_AUTH_ERR);
+    }
+
+    // Ask the user to enter a TOTP code.
+    //
+    // https://man7.org/linux/man-pages/man3/pam_get_authtok.3.html
+    let mut token_ptr: *const c_char = ptr::null();
+    let prompt = CString::new(&#34;Enter Google Authenticator code: &#34;)
+        .map_err(|e| errorf!(&#34;initializing C string: {}&#34;, e))?;
+    let rc = unsafe {
+        pam::pam_get_authtok(
+            pamh,
+            pam::PAM_AUTHTOK,
+            &amp;mut token_ptr,
+            prompt.as_c_str().as_ptr(),
+        )
+    };
+    if rc != pam::PAM_SUCCESS {
+        return Err(errorf!(&#34;failed getting pam token: {}&#34;, rc));
+    }
+    let token = (unsafe { CStr::from_ptr(token_ptr) })
+        .to_str()
+        .map_err(|e| errorf!(&#34;invalid token string: {}&#34;, e))?;
+
+    // Validate TOTP code.
+    let want = totp(key.as_slice());
+    if token.trim() != want {
+        return Err(errorf!(&#34;invalid totp token&#34;));
+    }
+    eprintln!(&#34;Google Authenticator code matched&#34;);
+    return Ok(pam::PAM_SUCCESS);
+}
+</code></pre><h2 id="exporting-c-apis">Exporting C APIs</h2>
+<p>Rust has direct support for defining a <a href="https://doc.rust-lang.org/nomicon/ffi.html">C foreign interface</a>. To match the <code>pam_sm_authenticate</code> signature expected by Linux-PAM, use the C to Rust translation strategies discussed above to match the argument types, and mark the function <code>#[no_mangle] pub extern &quot;C&quot;</code>.</p>
+<p>The exported method will wrap the auth logic defined above. <code>pam_sm_setcred</code> will be no-op.</p>
+<pre tabindex="0"><code>#[no_mangle]
+pub extern &#34;C&#34; fn pam_sm_authenticate(
+    pamh: *mut pam::pam_handle_t,
+    _flags: c_int,
+    _argc: c_int,
+    _argv: *const *const c_char,
+) -&gt; c_int {
+    return match authenticate(pamh) {
+        Ok(rc) =&gt; rc,
+        Err(err) =&gt; {
+            eprintln!(&#34;pam plugin: auth failed: {}&#34;, err);
+            return pam::PAM_AUTH_ERR;
+        }
+    };
+}
+
+#[no_mangle]
+pub extern &#34;C&#34; fn pam_sm_setcred(
+    _pamh: *mut pam::pam_handle_t,
+    _flags: c_int,
+    _argc: c_int,
+    _argv: *const *const c_char,
+) -&gt; c_int {
+    return pam::PAM_SUCCESS;
+}
+</code></pre><p>As expected, Rust builds a shared library with the PAM symbols.</p>
+<pre tabindex="0"><code>$ cargo build --release
+$ nm target/release/libpam_totp.so | grep pam_sm
+00000000000087e0 T pam_sm_authenticate
+0000000000009060 T pam_sm_setcred
+</code></pre><p>To install, copy the shared library to the Linux-PAM modules path.</p>
+<pre tabindex="0"><code>if [ -f &#34;/lib/x86_64-linux-gnu/security/pam_totp.so&#34; ]; then
+    # Unlink in case a program is actively holding this open. Fixes issues like
+    # sudo segfaulting when the file is overwritten.
+    sudo unlink /lib/x86_64-linux-gnu/security/pam_totp.so
+fi
+sudo cp target/release/libpam_totp.so /lib/x86_64-linux-gnu/security/pam_totp.so
+</code></pre><p>And write the base32&rsquo;d TOTP secret to <code>/etc</code>.</p>
+<pre tabindex="0"><code>// Is this an HSM?
+echo -n &#34;${TOTP_SECRET_KEY}&#34; | sudo tee /etc/pam_totp_key &gt; /dev/null
+sudo chmod 0600 /etc/pam_totp_key
+</code></pre><p>After adding the shared library as a entry to PAM&rsquo;s auth configuration&hellip;</p>
+<pre tabindex="0"><code># /etc/pam.d/common-auth
+
+# Install the custom TOTP shared library.
+auth    sufficient                      pam_totp.so
+
+# Existing configuration.
+auth    [success=1 default=ignore]      pam_unix.so nullok
+auth    requisite                       pam_deny.so
+auth    required                        pam_permit.so
+</code></pre><p><code>su</code> will now prompt me for a TOTP code when changing to the &ldquo;root&rdquo; user.</p>
+<pre tabindex="0"><code>ericchiang@localhost:~$ su -
+Enter Google Authenticator code: 
+Google Authenticator code matched
+root@localhost:~$
+</code></pre><p>Or reject me if the token is wrong.</p>
+<pre tabindex="0"><code>ericchiang@localhost:~$ su -
+Enter Google Authenticator code: 
+pam plugin: auth failed: invalid totp token
+su: Authentication failure
+ericchiang@localhost:~$
+</code></pre><p>Success!</p>
+<h2 id="why-rust">Why Rust?</h2>
+<p>Most of the C code I&rsquo;ve written professionally has been for these kinds of plugins. While it&rsquo;s a fun exercise to manually track allocations and &ldquo;know you&rsquo;ve still got it,&rdquo; trying to reason about someone else&rsquo;s memory management during a code review can be rough. The least favorite project I&rsquo;ve worked on involed refactoring a C ASN.1 parser.</p>
+<p>Rust ends up being a terrific, modern language for system programming. In situations like PAM where I&rsquo;d previously be inclined to write a C shim to exec something else, Rust provides a robust way to integrate and write custom logic. Be it OS tooling, drivers, or just a PAM extension.</p>
+
+</main>
+
+  <footer>
+  
+  
+  </footer>
+    <script>
+	  document.querySelectorAll("h2, h3, h4, h5, h6").forEach(function(node) {
+if (node.id === "") {
+  return;
+}
+let a = document.createElement("a");
+let img = document.createElement("img");
+img.src = "/img/link.svg";
+img.className = "header-link";
+a.href = "#" + node.id;
+a.append(img);
+node.append(a);
+
+	  });
+    </script>
+  </body>
+</html>
+

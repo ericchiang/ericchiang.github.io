@@ -6,8 +6,15 @@
     <description>Recent content on posts</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
-    <lastBuildDate>Sat, 17 Feb 2024 00:00:00 +0000</lastBuildDate>
+    <lastBuildDate>Mon, 26 Feb 2024 00:00:00 +0000</lastBuildDate>
     <atom:link href="https://ericchiang.github.io/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>Writing shared libraries using Rust</title>
+      <link>https://ericchiang.github.io/post/rust-libs/</link>
+      <pubDate>Mon, 26 Feb 2024 00:00:00 +0000</pubDate>
+      <guid>https://ericchiang.github.io/post/rust-libs/</guid>
+      <description>Every tool that gets big enough eventually provides a way to support third-party logic. Maybe you expose APIs for clients to call. Maybe you take some code and run it in a sandbox. Maybe you embed a Lua interpreter.&#xA;For many programs, extensibility means dynamic shared libraries. Good old, &amp;ldquo;here&amp;rsquo;s a .so file for you to dlopen().&amp;rdquo; PKCS #11, Sudo Plugins, Python and NodeJS addons, SQLite and Postgres extensions, Nginx and httpd modules, even LD_PRELOAD hacks.</description>
+    </item>
     <item>
       <title>Calling C from Go</title>
       <link>https://ericchiang.github.io/post/cgo/</link>
