@@ -69,7 +69,7 @@ if (!doNotTrack) {
 </ul>
 <h2 id="tpms-on-linux">TPMs on Linux</h2>
 <p>The Kernel exposes the TPM under <code>/dev/tpm0</code> and <code>/dev/tpmrm0</code>. <code>tpm0</code> provides direct access to the TPM relying on userland to synchronize and load/unload keys, while <code>tpmrm0</code> uses the Kernel’s builtin resource manager. We’ll be using <code>tpmrm0</code> for this post.</p>
-<p>Once we’ve opened a file handle we can use <a href="https://github.com/google/go-tpm">github.com/google/go-tpm</a> to execute TPM commands. Here’s a program that uses the TPM as a source of randomness.</p>
+<p>Once we’ve opened a file handle we can use <a href="https://pkg.go.dev/github.com/google/go-tpm/legacy/tpm2">github.com/google/go-tpm</a> to execute TPM commands. Here’s a program that uses the TPM as a source of randomness.</p>
 <pre tabindex="0"><code>f, err := os.OpenFile(&#34;/dev/tpmrm0&#34;, os.O_RDWR, 0)
 if err != nil {
         log.Fatalf(&#34;opening tpm: %v&#34;, err)
