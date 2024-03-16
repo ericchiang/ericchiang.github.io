@@ -6,15 +6,8 @@
     <description>Recent content on posts</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
-    <lastBuildDate>Sat, 02 Mar 2024 00:00:00 +0000</lastBuildDate>
+    <lastBuildDate>Mon, 26 Feb 2024 00:00:00 +0000</lastBuildDate>
     <atom:link href="https://ericchiang.github.io/index.xml" rel="self" type="application/rss+xml" />
-    <item>
-      <title>Building your own certificate authority</title>
-      <link>https://ericchiang.github.io/post/ca/</link>
-      <pubDate>Sat, 02 Mar 2024 00:00:00 +0000</pubDate>
-      <guid>https://ericchiang.github.io/post/ca/</guid>
-      <description>Certificate authorities are how you want to distribute credentials to users, not just This could be an SSH certificate&#xA;Certificate authorities are often easier than the manual alternatives.&#xA;Issuing certificates The core responsibility of a CA is processing certificate signing requests from clients. For web PKI, that means proving ownership of a DNS record. Either because you purchased the record through the CA, or performed some sort of challenge.&#xA;Client configuration Issuance policy Key storage CA private keys are moderately sensitive pieces of data to lose or otherwise misplace.</description>
-    </item>
     <item>
       <title>Writing shared libraries in Rust</title>
       <link>https://ericchiang.github.io/post/rust-libs/</link>
