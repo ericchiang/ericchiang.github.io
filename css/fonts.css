@@ -4,3 +4,8 @@ body {
 code {
 	font-family: monospace;
 }
+
+.menu-element {
+	padding: 5px;
+    border-radius: 5px;
+}
