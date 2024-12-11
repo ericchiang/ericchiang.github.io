@@ -35,6 +35,10 @@ h3 {
   font-size: x-large;
 }
 
+li {
+  margin-bottom: 0.25em;
+}
+
 /* code */
 pre {
   border: 1px solid #ddd;
