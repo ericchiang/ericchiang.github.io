@@ -13,7 +13,6 @@ body {
 .article-meta, .menu a {
   text-decoration: none;
   // background: #eee;
-  padding: 5px;
   border-radius: 5px;
 }
 .menu, .article-meta, footer { }

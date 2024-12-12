@@ -3,10 +3,13 @@
   xmlns:xhtml="http://www.w3.org/1999/xhtml">
   <url>
     <loc>https://ericchiang.github.io/</loc>
-    <lastmod>2024-02-26T00:00:00+00:00</lastmod>
+    <lastmod>2024-12-12T00:00:00+00:00</lastmod>
   </url><url>
     <loc>https://ericchiang.github.io/post/</loc>
-    <lastmod>2024-02-26T00:00:00+00:00</lastmod>
+    <lastmod>2024-12-12T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://ericchiang.github.io/post/zero-trust/</loc>
+    <lastmod>2024-12-12T00:00:00+00:00</lastmod>
   </url><url>
     <loc>https://ericchiang.github.io/post/rust-libs/</loc>
     <lastmod>2024-02-26T00:00:00+00:00</lastmod>

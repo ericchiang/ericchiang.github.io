@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en-us">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Eric Chiang | The road to zero trust is paved with good intentions</title>
+	<link rel="icon" href="/favicon.ico" type="image/x-icon" />
+    <link rel="stylesheet" href="/css/style.css" />
+    <link rel="stylesheet" href="/css/fonts.css" />
+    
+	
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-YR9ZQCMH4S"></script>
+<script>
+var doNotTrack = false;
+if (!doNotTrack) {
+	window.dataLayer = window.dataLayer || [];
+	function gtag(){dataLayer.push(arguments);}
+	gtag('js', new Date());
+	gtag('config', 'G-YR9ZQCMH4S', { 'anonymize_ip': false });
+}
+</script>
+
+  </head>
+
+  <body>
+    <nav>
+    <ul class="menu">
+      
+      <li><a href="/about/">Eric Chiang</a></li>
+      
+      <li><a href="/">posts</a></li>
+      
+      <li><a href="/index.xml">rss</a></li>
+      
+      <li><a href="/license/">license</a></li>
+      
+    </ul>
+    <hr/>
+    </nav>
+
+<div class="article-meta">
+<h1><span class="title">The road to zero trust is paved with good intentions</span></h1>
+
+<p class="date">2024/12/12</p>
+</div>
+
+<main>
+<p><em>This blog post is a written version of a talk that Eric and <a href="https://mayakaczorowski.com/about">Maya</a> gave at NorthSec in 2022. You can also <a href="https://youtu.be/UWpTFiRf4Uw?si=cYwvAQabGg7Q5Ota">watch the recording</a> and <a href="https://github.com/mayakacz/presentation-slides/blob/master/20220519%20-%20NorthSec%202022%20-%20The%20road%20to%20BeyondCorp%20is%20paved%20with%20good%20intentions.pdf">get the slides</a>. This blog post is also cross-posted to <a href="https://mayakaczorowski.com/blogs">Maya&rsquo;s blog</a>.</em></p>
+<p>We put together the material for this post in 2022 during the peak of the zero trust hype cycle when RSA show floor booths, marketing materials, analyst reports, and even a US executive branch <a href="https://www.whitehouse.gov/wp-content/uploads/2022/01/M-22-09.pdf">memorandum</a> couldn&rsquo;t stop talking about zero trust. Though the cycle&rsquo;s moved on — to &ldquo;AI-powered security&rdquo;— it doesn&rsquo;t feel like zero trust has necessarily progressed. Have we successfully adopted zero trust, and baked these principles into our industry? Or have we thrown a few identity aware proxies on the problem and called it a day?</p>
+<p>A few years on, we still struggle to agree on what &ldquo;zero trust&rdquo; means, much less how to implement it. If you&rsquo;re on a journey to zero trust, how far have you gotten in the past few years? And, how much further do you have to go?</p>
+<h2 id="what-is-a-zero-trust-architecture">What is a zero trust architecture?</h2>
+<p>A zero trust architecture is a security model that requires every user and device proving trustworthiness at every access attempt — essentially, treating every access as potentially untrusted until proven otherwise.</p>
+<p>Traditional network architecture relied on a network perimeter to delineate between trusted and untrusted users: trusted employees inside a firewall, vs. untrusted parties outside of it. By moving to a zero trust architecture, the location of an individual, specifically, which network they are on, is no longer what determines whether the individual is trusted, but other context is used to determine whether they can access a given application. There is no longer such a thing as a privileged, physical, corporate network.</p>
+<p><a href="https://cloud.google.com/beyondcorp">BeyondCorp</a>, first introduced in a <a href="https://research.google/pubs/beyondcorp-a-new-approach-to-enterprise-security/">2014 paper</a>, is Google&rsquo;s original, specific implementation from which the broader generalized set of principles for zero trust architecture emerged.</p>
+<h2 id="a-zero-trust-architecture-is-made-up-of-users-devices-access">A zero trust architecture is made up of users, devices, access</h2>
+<p>A zero trust architecture asks how users gain access to corporate resources — for example, how a new sales manager on their Macbook might gain access to an internal wiki. Authorization considers <em>the user</em> and <em>the device</em> they&rsquo;re using in order to make a determination about <em>access</em>:</p>
+<p><img src="../imgs/zta.png" alt="Components of a zero trust architecture are users, devices, and access"></p>
+<ul>
+<li><strong>Users: Who is connecting to your resources?</strong> Your users are your employees who need access to corp services. You need to figure out how they authenticate, what kinds of credentials they can use, and how you&rsquo;re going to manage group membership.</li>
+<li><strong>Devices: Where are they connecting from?</strong> You need to decide what kinds of devices you&rsquo;re okay with accessing your resources (a corporate issued laptop, a personal phone, etc.), and the minimum security of a device (device management, patch level, etc.). <em>(See also <a href="https://mayakaczorowski.com/blogs/beyondcorp-is-dead">Maya&rsquo;s rant on device trust in zero trust architectures</a>.)</em> A user&rsquo;s credential is only as secure as the device that that credential resides on.</li>
+<li><strong>Access: Should this user and device pair have access?</strong> The mechanics are the hard part here. A simple case like accessing an internal website might just require an SSO proxy with an allowlist of users, while SSHing to a prod machine will be more involved.</li>
+</ul>
+<p>Note that we&rsquo;ve intentionally left out networking — it&rsquo;s not a critical component of a zero trust architecture, and not part of the access decision. Which network you&rsquo;re on (including if you&rsquo;re on the corporate VPN or not) isn&rsquo;t used to make a decision — a decision is made entirely based on user and device.</p>
+<h2 id="the-road-to-zero-trust">The road to zero trust</h2>
+<p>To understand how far along you are in getting to a zero trust architecture, we&rsquo;ve put together a maturity model. This is less of prescriptive guidance of what you should do when, and more of a realistic way to help you evaluate where you are today, and what&rsquo;s left.</p>
+<p><img src="../imgs/zta-roadmap.png" alt="Maturity model for zero trust architecture: level 1, inventory; level 2, management; level 3, &ldquo;zero trust&rdquo;; and level 4, the long tail"></p>
+<p>As your adoption improves, from left to right, your organization has more capabilities in terms of how it secures its users, devices, and access to applications:</p>
+<ul>
+<li><strong>Level 1: Inventory</strong>. You&rsquo;re treating a VPN as the access control point for the applications on your network. You can enumerate users and devices — you&rsquo;re using an SSO to inventory users, and have a manual way to list devices. These are table stakes IT and security capabilities.</li>
+<li><strong>Level 2: Management</strong>. You have per-service authorization that lets you segment access to specific applications, for example by using a proxy. You can measure most and enforce some security controls. You use a VPN for your network, and MDM to track and measure your devices, and your users use SSO and MFA, ideally security keys. This is where most security-focused enterprises are today.</li>
+<li><strong>Level 3: &ldquo;Zero Trust&rdquo;</strong>. You&rsquo;re all in on and aligned to what the market believes is a zero trust architecture — and maybe you&rsquo;ve even bought a solution that bills itself as zero trust! You can tier users and devices based on measurements, and enforce tiered access to applications based on those characteristics. <strong>This is what we typically see called &ldquo;zero trust&rdquo; in the market today.</strong></li>
+<li><strong>Level 4: The long tail</strong>. This is what many aspire to, and think they&rsquo;re being sold, but no one has yet to fully achieve. You want to be able to dynamically enforce risk-based access to applications. There&rsquo;s a long tail of user, device, or access issues, such as SaaS apps, that make this very hard to get right today.</li>
+</ul>
+<p>Let&rsquo;s dive into more detail about what your organization&rsquo;s controls look like at each level.</p>
+<h3 id="level-1-inventory">Level 1: Inventory</h3>
+<p>At this level, you have an inventory of your users and devices.</p>
+<p>You have a way to enumerate <strong>users</strong>, most likely through a centralized identity provider and single-sign on (SSO). This is typically tied to your HR information system, so when a new employee joins, changes teams, or leaves, their identity can easily be updated. Unfortunately, a lot of SaaS tools charge you extra for the ability to use SSO with their application (the <a href="https://sso.tax/">SSO tax</a>); or sometimes even more for the ability to <em>enforce</em> SSO.</p>
+<p>You have a <strong>device</strong> inventory (maybe a spreadsheet maintained by IT), and some minimal management of devices, such as network credentials. This can be complicated if you allow employees to access resources on their personal devices, have a mix of operating systems, or need to support mobile devices.</p>
+<p>You use a flat, traditional network, where if you&rsquo;re on the network, you&rsquo;re trusted — just like with a traditional VPN. You know and ideally can control which users and devices can <strong>access</strong> the network, even if provisioning is manual. But, you&rsquo;re not segmenting users and devices within your network.</p>
+<p>If you&rsquo;re only dealing with corporate devices, and only self-hosted applications, a VPN plus SSO is a good initial set of tools to limit access to your internal applications.</p>
+<h3 id="level-2-management">Level 2: Management</h3>
+<p>At this level, you can measure most, and enforce some, security controls. You&rsquo;re moving beyond basic enumeration of your users and devices, and into hardening.</p>
+<p>Your <strong>users</strong> have more secure authentication methods — specifically, hardware security tokens and WebAuthn. (Please, <a href="https://krebsonsecurity.com/2018/07/google-security-keys-neutralized-employee-phishing">just use security keys</a>.) You have some differentiation between users based on properties (usually group membership) to allow for effective role-based access control. This ties into your HR system to get updated information on a user&rsquo;s role. You are also able to create groups based on organizational hierarchy (e.g., everyone in sales).</p>
+<p>Your <strong>devices</strong> run a mobile device management (MDM) solution or similar capability, and you can enforce basic actions like remote wipe. You also have a way to measure properties such as OS patch level. Open source tools like <a href="https://www.osquery.io/">osquery</a> make this easy. Devices are identifiable through per-device credentials to tie them back to inventory during access decisions.</p>
+<p>You&rsquo;ve moved from a binary <strong>access</strong> decision based on whether an individual is in your organization, to per-application authorization with role-based controls. It&rsquo;s easier to maintain these controls if they&rsquo;re centralized, rather than built into each internal application separately — which typically means an L7 proxy for browser-based traffic, and a different strategy, like a jumpbox, for SSH-based developer traffic.</p>
+<h3 id="level-3-zero-trust">Level 3: &ldquo;Zero Trust&rdquo;</h3>
+<p>At this level, you can enforce access based on device characteristics.</p>
+<p>Beyond securing only <strong>user</strong> logins, you&rsquo;re also taking into account derived credentials like SSH keys, browser cookies and access tokens, which are often less well protected than a user login. A strong login with SSO and a security key isn&rsquo;t as useful if the user then generates a powerful, never-expiring API token that ends up in a git repo. You&rsquo;re limiting potential unauthorized access with shorter <a href="https://support.google.com/cloudidentity/answer/9368756">session policies</a> for Cloud CLIs, and restrictions on <a href="https://docs.github.com/en/organizations/managing-oauth-access-to-your-organizations-data/about-oauth-app-access-restrictions">OAuth applications</a> on corporate services.</p>
+<p>In addition to measuring when <strong>devices</strong> are out of policy, you enforce access based on these characteristics. So, you are requiring patching of a device for access to your resources, or forcing periodic reboots of devices. The issuance of device credentials are authenticated using a hardware-based identity: a TPM or a platform-specific implementation like <a href="https://source.android.com/docs/security/best-practices/hardware">Android&rsquo;s Strongbox</a>, or platform APIs like Apple&rsquo;s Managed Device Attestation.</p>
+<p>And finally, you move from having access solely based on the user, to tiered, or differentiated, <strong>access</strong>. Tiered access is based on device state: a personal vs. a corporate device, patch level, and compliance with security configuration requirements. Individual devices can &ldquo;lose trust&rdquo; and access rights based on inventory properties, like failing to apply an update timely.</p>
+<p>You&rsquo;re really doing zero trust now.</p>
+<h3 id="level-4-the-long-tail">Level 4: The long tail</h3>
+<p>At this level, you can dynamically enforce dynamic, risk-based access to all of your applications, for all of your users, on all of your devices. For example, you can change access requirements on the fly based on risk, like requiring users to re-authenticate.</p>
+<p><em>– reality check –</em></p>
+<p>That&rsquo;s not real.</p>
+<p>This is where it really goes to shit. There&rsquo;s a long tail of things that are either hard to get right or not yet solved, which make it effectively impossible for a normal organization to <em>completely</em> adopt a zero trust architecture: SaaS applications, <em>truly</em> risk-based access, device state, and all the random devices on your network. There are always exceptions in security — so the problem becomes, how do we deal with these exceptions?</p>
+<h4 id="saas-applications">SaaS applications</h4>
+<p>Applications that you can&rsquo;t put behind a proxy are hard to control access to. How do you put Salesforce behind a proxy? SaaS apps generally only provide SSO as a means for delegating access to your company. If you&rsquo;re lucky, there might be an API for syncing groups for role based authorization. Third-party device authentication is effectively unsupported by the industry.</p>
+<p>One workaround for dealing with SaaS apps is to peer them to your network, so that ingress traffic to the app is only allowlisted for your corporate network&rsquo;s IP ranges. So for an employee to access an app like Workday, they need to pass their traffic through your corporate network, out the other end, and on to the application.</p>
+<p>In addition to being slow, this solution is a step backwards from what we&rsquo;re doing with zero trust — it assumes your network is flat, and if someone is on your network, then can now access this application.</p>
+<h4 id="risk-based-access">Risk-based access</h4>
+<p>The dream is to have nuanced authorization decisions based on risk. The failure mode is to overfit the model, and fall to the temptation of having too many tiers. If every application in your environment has its own set of requirements, it&rsquo;s hard to standardize and even harder to debug why someone may or may not have access to an application.</p>
+<p>Ever more fine-grained requirements will demand more of your access infrastructure. A bug tracker will need per-bug permissions. An admin panel may need just-in-time authorizations to permit support staff to debug the specific account they&rsquo;re assigned to.</p>
+<p>And, the more you rely on specific measurements, the more the lack of formalized APIs becomes apparent — did half of your employees really fail to apply a patch, or did macOS tweak its naming convention again?</p>
+<h4 id="device-state">Device state</h4>
+<p>Device state is useful for making an access decision — however, it&rsquo;s self-reported by the device. <a href="https://arstechnica.com/tech-policy/2014/05/photos-of-an-nsa-upgrade-factory-show-cisco-router-getting-implant/">When your device has been compromised</a>, it starts lying to you. Trusted boot and device state attestation are meant to help you detect when this has happened — these work much better for closed ecosystems (like macOS), and are much more complex for open ecosystems with multiple vendors (like Windows).</p>
+<p>Device state goes completely out the window as soon as you have to provide access to devices managed by another organization. If you&rsquo;re large enough, you may be able to require use of a managed device by the vendors.</p>
+<h4 id="network-devices">Network devices</h4>
+<p>Your corporate network has a lot of legacy devices that don&rsquo;t meet your Level 3 security controls — like printers. Printers don&rsquo;t have secure boot. Your MDM probably can&rsquo;t manage your printer. The easiest way to set up your printer is with a fixed IP address. It&rsquo;s still a device on the network, and you want to be able to manage access to it in the same way as my other network devices, but you can&rsquo;t. Existing networks with legacy devices will have a harder time here — maybe if you&rsquo;re at a startup, and you&rsquo;re trying to adopt a zero trust architecture, you can just not have a printer.</p>
+<p>So, ignoring our long tail of complications, what would the ultimate level of attaining zero trust look like?</p>
+<p><em>– back to regularly scheduled content –</em></p>
+<p>You have a decent way to manage <strong>users</strong> and user access to SaaS applications, and correlate logs for when users accessed those applications. There are only really two partial solutions today: either host everything yourself, which you see becoming more common with larger infrastructure tools with on prem solutions; or just be Google or Microsoft and use your single sign-on to access everything.</p>
+<p>In terms of legacy <strong>devices</strong>, your zero trust architecture includes all of the devices you have in your corporate network — because they&rsquo;re all a point of entry to the network. Usually, the easiest way to address this long tail of devices is to move them off the corporate network, instead of making sure they meet the requirements they need to be on it.</p>
+<p>And lastly, with all of that information about users and devices, you can make real-time <strong>access</strong> decisions that aren&rsquo;t just rule-based, but that change based on what you know, quickly enough that the user doesn&rsquo;t notice or get frustrated. This isn&rsquo;t easy.</p>
+<h2 id="zero-trust-is-a-continuous-journey">Zero trust is a continuous journey</h2>
+<p>The wrong takeaway of this blog post is to treat the levels like a checklist — but, if that&rsquo;s what you&rsquo;re looking for, and you&rsquo;re at the very beginning of your zero trust journey, take this as directional guidance on where you&rsquo;re headed.</p>
+<p>The reality is that zero trust is never &ldquo;done&rdquo; — it&rsquo;s a continuous journey (and the friends you make along the way). You should consider what&rsquo;s right for the risk your organization is facing — it might not be worth it for you to reach the top level. Focus on the core components of a zero trust architecture — users, devices, and access — and what you can do to improve in each area, regardless of where you&rsquo;re starting.</p>
+
+</main>
+
+  <footer>
+  
+  
+  </footer>
+    <script>
+	  document.querySelectorAll("h2, h3, h4, h5, h6").forEach(function(node) {
+if (node.id === "") {
+  return;
+}
+let a = document.createElement("a");
+let img = document.createElement("img");
+img.src = "/img/link.svg";
+img.className = "header-link";
+a.href = "#" + node.id;
+a.append(img);
+node.append(a);
+
+	  });
+    </script>
+  </body>
+</html>
+
