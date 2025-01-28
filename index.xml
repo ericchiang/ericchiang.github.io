@@ -6,8 +6,15 @@
     <description>Recent content in posts on Eric Chiang</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
-    <lastBuildDate>Thu, 12 Dec 2024 00:00:00 +0000</lastBuildDate>
+    <lastBuildDate>Mon, 27 Jan 2025 00:00:00 +0000</lastBuildDate>
     <atom:link href="https://ericchiang.github.io/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>Confidential Compute and GPUs</title>
+      <link>https://ericchiang.github.io/post/confidential-gpus/</link>
+      <pubDate>Mon, 27 Jan 2025 00:00:00 +0000</pubDate>
+      <guid>https://ericchiang.github.io/post/confidential-gpus/</guid>
+      <description>Recently, I’ve had a few conversations about NVIDIA Confidential Compute, usually in the context of startups trying to sell security products to AI companies.&#xA;The pitch generally looks like this: Companies are protective of their weights and their data. We should be able to train and/or run models on GPUs securely using attestation primitives. In the same way that we might store a private key in an HSM, surely we can design a similar construct for AI.</description>
+    </item>
     <item>
       <title>The road to zero trust is paved with good intentions</title>
       <link>https://ericchiang.github.io/post/zero-trust/</link>
