@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en-us">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Eric Chiang | Protobuf generators for fun and profit</title>
+	<link rel="icon" href="/favicon.ico" type="image/x-icon" />
+    <link rel="stylesheet" href="/css/style.css" />
+    <link rel="stylesheet" href="/css/fonts.css" />
+    
+	
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-YR9ZQCMH4S"></script>
+<script>
+var doNotTrack = false;
+if (!doNotTrack) {
+	window.dataLayer = window.dataLayer || [];
+	function gtag(){dataLayer.push(arguments);}
+	gtag('js', new Date());
+	gtag('config', 'G-YR9ZQCMH4S', { 'anonymize_ip': false });
+}
+</script>
+
+  </head>
+
+  <body>
+    <nav>
+    <ul class="menu">
+      
+      <li><a href="/about/">Eric Chiang</a></li>
+      
+      <li><a href="/">posts</a></li>
+      
+      <li><a href="/index.xml">rss</a></li>
+      
+      <li><a href="/license/">license</a></li>
+      
+    </ul>
+    <hr/>
+    </nav>
+
+<div class="article-meta">
+<h1><span class="title">Protobuf generators for fun and profit</span></h1>
+
+<p class="date">2025/02/25</p>
+</div>
+
+<main>
+<p>There aren&rsquo;t a ton of great options for API definition languages. OpenAPI and gRPC are the only real game in town, but each have their own shortcomings. OpenAPI is a huge, awkward language for expressing types. gRPC is focused on its own protocol rather than interoping with more general semantics like REST.</p>
+<p>Since I vastly prefer the Protocol Buffer language over YAML, I was recently looking into <a href="https://cloud.google.com/blog/products/api-management/bridge-the-gap-between-grpc-and-rest-http-apis">REST bindings</a> for gRPC, but the inconsistency of the ecosystem stands out. Individual projects run the gambit between totally battle tested and basically unmaintained.</p>
+<p>This is a common story. If you use protobuf outside of a certain giant cooperation that makes them work for everything internally, it&rsquo;s inevitable that you&rsquo;ll want to generate something that there&rsquo;s not a convenient Open Source project for. OpenAPI v3 specs, hosted documentation, JSON bindings in other languages, etc.</p>
+<p>The good news: writing your own protobuf generators is super easy.</p>
+<h2 id="protoc-plugins">protoc plugins</h2>
+<p>Though you can technically <a href="https://github.com/yoheimuta/go-protoparser">parse a proto file</a> directly, it’s much easier to let the Protocol Buffer Compiler (protoc) resolve imports and types for you. protoc plugins then run as a subprocess, receiving a parsed intermediate format through stdin and returning a response through stdout.</p>
+<p><img src="../imgs/protoc_plugins.png" alt=""></p>
+<p>Amusingly, the request and response types are themselves protobuf messages.</p>
+<p>The request includes parsed files passed to the compiler, and a list of files that are expected to be operated on.</p>
+<pre tabindex="0"><code>// https://github.com/protocolbuffers/protobuf/blob/main/src/google/protobuf/compiler/plugin.proto
+//
+// An encoded CodeGeneratorRequest is written to the plugin&#39;s stdin.
+message CodeGeneratorRequest {
+  // The .proto files that were explicitly listed on the command-line.
+  //
+  // ...
+  repeated string file_to_generate = 1; // Example: [&#34;file.proto&#34;]
+
+  // FileDescriptorProtos for all files in files_to_generate and everything
+  // they import.
+  // ...
+  repeated FileDescriptorProto proto_file = 15;
+
+  // ...
+}
+</code></pre><p>The plugin then returns generated files for each of the inputs.</p>
+<pre tabindex="0"><code>// The plugin writes an encoded CodeGeneratorResponse to stdout.
+message CodeGeneratorResponse {
+  // Represents a single generated file.
+  message File {
+    // The file name, relative to the output directory...
+    optional string name = 1; // Example: &#34;file.gen&#34;
+
+    // The file contents.
+    optional string content = 15;
+
+    // ...
+  }
+  repeated File file = 15;
+}
+</code></pre><p>A simple Go skeleton looks something like the following.</p>
+<pre tabindex="0"><code>package main
+
+import (
+	&#34;fmt&#34;
+	&#34;io&#34;
+	&#34;os&#34;
+
+	&#34;google.golang.org/protobuf/proto&#34;
+	&#34;google.golang.org/protobuf/types/pluginpb&#34;
+)
+
+func main() {
+	data, err := io.ReadAll(os.Stdin)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, &#34;Failed to read stdin: %v\n&#34;, err)
+		os.Exit(1)
+	}
+
+	req := &amp;pluginpb.CodeGeneratorRequest{}
+	if err := proto.Unmarshal(data, req); err != nil {
+		fmt.Fprintf(os.Stderr, &#34;Failed to parse stdin: %v\n&#34;, err)
+		os.Exit(1)
+	}
+	resp, err := generate(req)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, &#34;Generating output: %v\n&#34;, err)
+		os.Exit(1)
+	}
+	out, err := proto.Marshal(resp)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, &#34;Encoding response: %v\n&#34;, err)
+		os.Exit(1)
+	}
+	os.Stdout.Write(out)
+}
+
+func generate(req *pluginpb.CodeGeneratorRequest) (*pluginpb.CodeGeneratorResponse, error) {
+	// ...
+}
+</code></pre><h2 id="writing-a-plugin">Writing a plugin</h2>
+<p>Let&rsquo;s say we have the following proto file and would like to generate markdown docs to host.</p>
+<p>Of course, we don&rsquo;t just want to copy our messages and field names.	Docs should include information from the original definition like comments and type information.</p>
+<pre tabindex="0"><code>edition = &#34;2023&#34;;
+
+package io.github.ericchiang;
+
+// A food ingredient to use for a recipe.
+message Ingredient {
+	// The name of the ingredient.
+	string name = 1;
+	// The amount required, in grams.
+	int64 amount = 2;
+}
+
+// A delicious recipe to make!
+message Recipe {
+	// Name of the recipe. Required.
+	string name = 1;
+	// A list of ingredients used in the recipe. 
+	repeated Ingredient ingredients = 2;
+	// A set of steps to follow for the recipe.
+	repeated string steps = 3;
+}
+</code></pre><p>The raw request passed to protoc plugins can be a little clunky. Luckily, Go&rsquo;s protobuf reflection package has conveniences to convert these to reflection objects. This provides easy APIs for looking up files, messages, and comments by names and types.</p>
+<p>The following is a little less than 100 lines of code that iterates through ever message in a file, inspecting every field, and generating documentation including original comments and type information.</p>
+<pre tabindex="0"><code>package main
+
+import (
+	&#34;bytes&#34;
+	&#34;fmt&#34;
+	&#34;io&#34;
+	&#34;os&#34;
+	&#34;strings&#34;
+
+	&#34;google.golang.org/protobuf/proto&#34;
+	&#34;google.golang.org/protobuf/reflect/protodesc&#34;
+	&#34;google.golang.org/protobuf/reflect/protoreflect&#34;
+	&#34;google.golang.org/protobuf/types/descriptorpb&#34;
+	&#34;google.golang.org/protobuf/types/pluginpb&#34;
+)
+
+func main() {
+	// ...
+}
+
+func generate(req *pluginpb.CodeGeneratorRequest) (*pluginpb.CodeGeneratorResponse, error) {
+	set := &amp;descriptorpb.FileDescriptorSet{File: req.GetProtoFile()}
+	files, err := protodesc.NewFiles(set)
+	if err != nil {
+		return nil, fmt.Errorf(&#34;parsing files: %v&#34;, err)
+	}
+
+	resp := &amp;pluginpb.CodeGeneratorResponse{
+		// Mark support for newer proto features.
+		SupportedFeatures: proto.Uint64(uint64(pluginpb.CodeGeneratorResponse_FEATURE_SUPPORTS_EDITIONS)),
+		MaximumEdition:    proto.Int32(int32(descriptorpb.Edition_EDITION_2024)),
+	}
+ 
+	for _, path := range req.GetFileToGenerate() {
+		// For each file, generate a markdown file.
+		buf := &amp;bytes.Buffer{}
+		desc, err := files.FindFileByPath(path)
+		if err != nil {
+			return nil, fmt.Errorf(&#34;looking up file %s: %v&#34;, path, err)
+		}
+
+		msgs := desc.Messages()
+		for i := range msgs.Len() {
+			msg := msgs.Get(i)
+
+			srcs := msg.ParentFile().SourceLocations()
+			src := srcs.ByDescriptor(msg)
+
+			// Write the message name and associated comment.
+			buf.WriteString(&#34;# &#34; + string(msg.Name()) + &#34;\n&#34;)
+			if comment := strings.TrimSpace(src.LeadingComments); comment != &#34;&#34; {
+				buf.WriteString(comment + &#34;\n\n&#34;)
+			}
+
+			// Generate documentation for each field.
+			buf.WriteString(&#34;Fields:\n&#34;)
+			fields := msg.Fields()
+			for i := range fields.Len() {
+				field := fields.Get(i)
+				// Write field name.
+				buf.WriteString(&#34;* &#34; + string(field.JSONName()) + &#34; - _&#34;)
+
+				// Write type information of the field.
+				if field.Cardinality() == protoreflect.Repeated {
+					buf.WriteString(&#34;repeated &#34;)
+				}
+				kind := field.Kind().String()
+				if field.Kind() == protoreflect.MessageKind {
+					// If the type is a message, link to that message.
+					name := string(field.Message().Name())
+					kind = &#34;[&#34; + name + &#34;](#&#34; + strings.ToLower(name) + &#34;)&#34;
+				}
+				buf.WriteString(kind + &#34;_ - &#34;)
+
+				// Write the field&#39;s comment.
+				src := srcs.ByDescriptor(field)
+				if comment := strings.TrimSpace(src.LeadingComments); comment != &#34;&#34; {
+					comment = strings.ReplaceAll(comment, &#34;\n&#34;, &#34; &#34;)
+					buf.WriteString(comment + &#34;\n&#34;)
+				}
+			}
+			buf.WriteString(&#34;\n&#34;)
+		}
+
+		// Replace extension with &#34;.md&#34;.
+		name, _, _ := strings.Cut(path, &#34;.&#34;)
+		name += &#34;.md&#34;
+
+		// Return a file to protoc to write.
+		file := &amp;pluginpb.CodeGeneratorResponse_File{
+			Name:    proto.String(name),
+			Content: proto.String(buf.String()),
+		}
+		resp.File = append(resp.File, file)
+	}
+	return resp, nil
+}
+</code></pre><p>Finally, compile to a binary with the name <code>protoc-gen-{NAME}</code>, add the binary to your <code>PATH</code>, and run protoc with the flag <code>--{NAME}_out={OUTDIR}</code>.</p>
+<pre tabindex="0"><code>go build -o protoc-gen-markdown main.go
+PATH=&#34;${PATH}:.&#34; protoc --markdown_out=. food.proto
+</code></pre><p>protoc invokes the plugin and writes the generated markdown file to the output directory.</p>
+<pre tabindex="0"><code>% cat food.md 
+# Ingredient
+A food ingredient to use for a recipe.
+
+Fields:
+* name - _string_ - The name of the ingredient.
+* amount - _int64_ - The amount required, in grams.
+
+# Recipe
+A delicious recipe to make!
+
+Fields:
+* name - _string_ - Name of the recipe. Required.
+* ingredients - _repeated [Ingredient](#ingredient)_ - A list of ingredients used in the recipe.
+* steps - _repeated string_ - A set of steps to follow for the recipe.
+</code></pre><h2 id="profit">&hellip;profit?</h2>
+<p>It&rsquo;s worth mentioning how good the the newer(ish) <a href="https://go.dev/blog/protobuf-apiv2">Go protobuf APIs</a> are. Particularly the reflection capabilities. There was a <a href="https://news.ycombinator.com/item?id=22468494">kerfuffle</a> around import paths when they were announced, but the packages are a huge upgrade. <a href="https://google.golang.org/protobuf/reflect/protodesc"><code>google.golang.org/protobuf/reflect/protodesc</code></a> is a superb tool for plugin authors.</p>
+<p>With regards to protobuf itself. While it&rsquo;d be amazing if everything worked perfectly out of the box, an easy plugin system makes betting on protobuf much more palatable. If there are missing OSS projects, you can always program your way out in a pinch.</p>
+
+</main>
+
+  <footer>
+  
+  
+  </footer>
+    <script>
+	  document.querySelectorAll("h2, h3, h4, h5, h6").forEach(function(node) {
+if (node.id === "") {
+  return;
+}
+let a = document.createElement("a");
+let img = document.createElement("img");
+img.src = "/img/link.svg";
+img.className = "header-link";
+a.href = "#" + node.id;
+a.append(img);
+node.append(a);
+
+	  });
+    </script>
+  </body>
+</html>
+
