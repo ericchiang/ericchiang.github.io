@@ -9,17 +9,20 @@
     <link rel="stylesheet" href="/css/fonts.css" />
     
 	
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-YR9ZQCMH4S"></script>
-<script>
-var doNotTrack = false;
-if (!doNotTrack) {
-	window.dataLayer = window.dataLayer || [];
-	function gtag(){dataLayer.push(arguments);}
-	gtag('js', new Date());
-	gtag('config', 'G-YR9ZQCMH4S', { 'anonymize_ip': false });
-}
-</script>
-
+      <script async src="https://www.googletagmanager.com/gtag/js?id=G-YR9ZQCMH4S"></script>
+      <script>
+        var doNotTrack = false;
+        if ( false ) {
+          var dnt = (navigator.doNotTrack || window.doNotTrack || navigator.msDoNotTrack);
+          var doNotTrack = (dnt == "1" || dnt == "yes");
+        }
+        if (!doNotTrack) {
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments);}
+          gtag('js', new Date());
+          gtag('config', 'G-YR9ZQCMH4S');
+        }
+      </script>
   </head>
 
   <body>
@@ -342,7 +345,7 @@ import &#34;C&#34;
 <p>Go <em>techinically</em> provides support for operating as a shared library with <a href="https://pkg.go.dev/cmd/cgo#hdr-C_references_to_Go">exported C symbols</a>.</p>
 <p>Practically, because Go shared libraries contain the entire Go runtime, there are some operational drawbacks when loading one. Some querky, such as <a href="https://github.com/golang/go/issues/11100">lack of <code>dlclose</code> support</a>. Some catastrophic, like <a href="https://github.com/golang/go/issues/15538">deadlocks if the loading process ever calls <code>fork()</code></a>.</p>
 <p>To load a Go shared library safely, you have to control the loading C in program as well. At which point there are undoubtly simplier architectures. And if you don&rsquo;t control the loading C program, maybe use Rust instead?</p>
-<h2 id="_cgo-is-not-go_"><em>&ldquo;Cgo is not Go&rdquo;</em></h2>
+<h2 id="heading"><em>&ldquo;Cgo is not Go&rdquo;</em></h2>
 <p>While there are situations where cgo is necessary, it remains an extremely awkward way to write code. C and Go interact in subtle ways that require a considerable amount of manual tracking. Forget to free a variable, use the wrong unsafe method, or make assumptions about what thread you&rsquo;re running on, and you end up with hard to debug memory corruption failure rather than a compile error or stack trace.</p>
 <p>At the end of the day, as Rob Pike&rsquo;s said, <a href="https://www.youtube.com/watch?v=PAAkCSZUG1c&amp;t=12m37s"><em>&ldquo;Cgo is not Go.&rdquo;</em></a></p>
 
