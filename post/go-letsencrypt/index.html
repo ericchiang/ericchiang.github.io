@@ -9,20 +9,17 @@
     <link rel="stylesheet" href="/css/fonts.css" />
     
 	
-      <script async src="https://www.googletagmanager.com/gtag/js?id=G-YR9ZQCMH4S"></script>
-      <script>
-        var doNotTrack = false;
-        if ( false ) {
-          var dnt = (navigator.doNotTrack || window.doNotTrack || navigator.msDoNotTrack);
-          var doNotTrack = (dnt == "1" || dnt == "yes");
-        }
-        if (!doNotTrack) {
-          window.dataLayer = window.dataLayer || [];
-          function gtag(){dataLayer.push(arguments);}
-          gtag('js', new Date());
-          gtag('config', 'G-YR9ZQCMH4S');
-        }
-      </script>
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-YR9ZQCMH4S"></script>
+<script>
+var doNotTrack = false;
+if (!doNotTrack) {
+	window.dataLayer = window.dataLayer || [];
+	function gtag(){dataLayer.push(arguments);}
+	gtag('js', new Date());
+	gtag('config', 'G-YR9ZQCMH4S', { 'anonymize_ip': false });
+}
+</script>
+
   </head>
 
   <body>
